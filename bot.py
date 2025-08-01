@@ -107,7 +107,6 @@ def calculate_and_finalize_points(member_id, event_code):
 # --- Bot Setup ---
 intents = discord.Intents.default()
 intents.members = True
-intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 event_group = app_commands.Group(name="event", description="Manage event activity points.")
 
@@ -196,7 +195,7 @@ async def stop(interaction: Interaction):
     save_data(ACTIVE_EVENTS_FILE, active_events)
     
     event_type = EVENT_CONFIGS[event['event_id']]['event_type']
-    await interaction.followup.send(f"✅ Event **{event_type}** has been stopped. Points awarded to all participants.", ephemeral=True)
+    await interaction.followup.send(f"✅ Event `{event_type}` has been stopped. Points have been calculated for all participants.", ephemeral=True)
 
 @event_group.command(name="kick", description="Removes a participant from your event.")
 @app_commands.describe(member="The member to remove from the event.")
@@ -240,8 +239,11 @@ async def list_participants(interaction: Interaction):
         
     participant_list = []
     for pid in participant_ids:
-        member = interaction.guild.get_member(int(pid))
-        participant_list.append(member.display_name if member else f"Unknown User (ID: {pid})")
+        try:
+            member = await interaction.guild.fetch_member(int(pid))
+            participant_list.append(member.display_name)
+        except (discord.NotFound, discord.HTTPException):
+            participant_list.append(f"Unknown User (ID: {pid})")
 
     event_type = EVENT_CONFIGS[event['event_id']]['event_type']
     embed = Embed(title=f"Participants in '{event_type}'", description="> " + "\n> ".join(participant_list), color=discord.Color.blue())
@@ -251,79 +253,24 @@ async def list_participants(interaction: Interaction):
 async def me(interaction: Interaction):
     user_id = str(interaction.user.id)
     user_data = points_data.get(user_id)
-
-    if not user_data or not user_data.get('events'):
-        await interaction.response.send_message("You have not participated in any events yet.", ephemeral=True)
-        return
-
-    embed = Embed(title="Your Activity Points", color=discord.Color.purple())
-    embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-    embed.add_field(name="Total Points", value=f"**{user_data.get('total_points', 0):.2f}**", inline=False)
-
-    event_details = []
-    for event_id, points in user_data['events'].items():
-        event_type = EVENT_CONFIGS.get(event_id, {}).get('event_type', 'Unknown Event')
-        event_details.append(f"**{event_type}**: {points:.2f} points")
-    
-    if event_details:
-        embed.add_field(name="Points by Event", value="\n".join(event_details), inline=False)
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
 @event_group.command(name="id", description="Lists all available event IDs and their types.")
 async def id(interaction: Interaction):
     if not EVENT_CONFIGS:
         await interaction.response.send_message("No event types are configured.", ephemeral=True)
         return
     
-    embed = Embed(title="Available Event Types", color=discord.Color.teal())
+    embed = Embed(title="Available Event IDs", color=discord.Color.blue())
     id_list = [f"`{eid}` - {details['event_type']}" for eid, details in EVENT_CONFIGS.items()]
     embed.description = "\n".join(id_list)
     await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@event_group.command(name="records", description="Shows a detailed record of points for each user.")
-async def records(interaction: Interaction):
-    if not points_data:
-        await interaction.response.send_message("No points have been recorded yet.", ephemeral=True)
-        return
-
-    embed = Embed(title="Detailed Point Records", color=discord.Color.blue())
+        event_details.append(f"**{event_type}**: {points:.2f} points")
     
-    id_list = [f"`{eid}` - {details['event_type']}" for eid, details in EVENT_CONFIGS.items()]
-    sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
-
-        return
-
-    event = active_events[active_event_code]
-    participants = event.get('participants', {})
-
-    if not participants:
-        await interaction.response.send_message("There are no participants in your event yet.", ephemeral=True)
-        return
-
-    embed = Embed(
-        title=f"👥 Participants in Event `{event['event_id']}`",
-@event_group.command(name="me", description="Shows your own total points and event breakdown.")
-async def me(interaction: Interaction):
-    """Shows the calling user their own point summary."""
-    await interaction.response.defer(ephemeral=True)
-    
-    user_id = str(interaction.user.id)
-
-    if user_id not in points_data or not points_data[user_id]:
-        await interaction.followup.send("You do not have any points recorded yet.", ephemeral=True)
-        return
-
-    user_data = points_data[user_id]
-    total_points = user_data.get('total_points', 0)
-    
-    embed = Embed(
-        title="My Activity Points",
+    if event_details:
 @event_group.command(name="summary", description="Displays the point leaderboard for the server.")
 async def summary(interaction: Interaction):
-    """Displays a ranked leaderboard of user points."""
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=False)
 
+    points_data = load_data(POINTS_FILE, {})
     if not points_data:
         await interaction.followup.send("No points have been recorded yet.")
         return
@@ -336,142 +283,111 @@ async def summary(interaction: Interaction):
         embed.description = "The leaderboard is empty."
     else:
         leaderboard_lines = []
-        for i, (user_id, data) in enumerate(sorted_users[:20]):
+        for i, (user_id, data) in enumerate(sorted_users[:25]): # Show top 25
             try:
                 member = await interaction.guild.fetch_member(int(user_id))
                 name = member.display_name
             except (discord.NotFound, discord.HTTPException):
                 name = f"Unknown User (ID: {user_id})"
             
-            total_points = data.get('total_points', 0)
-            leaderboard_lines.append(f"**{i+1}.** {name} - `{total_points:.2f}` points")
-
-        embed.description = "\n".join(leaderboard_lines)
-
-    await interaction.followup.send(embed=embed)
-            member = await interaction.guild.fetch_member(int(user_id))
-            participant_list.append(f"- {member.display_name}")
-        except (discord.NotFound, discord.HTTPException):
-            participant_list.append(f"- Unknown User (ID: {user_id})")
-    
-    embed.add_field(name="Current Participants", value="\n".join(participant_list), inline=False)
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
 @event_group.command(name="records", description="Shows a detailed record of points for each user.")
 async def records(interaction: Interaction):
-    """Shows a detailed breakdown of points for each user."""
     await interaction.response.defer(ephemeral=True)
 
+    points_data = load_data(POINTS_FILE, {})
     if not points_data:
         await interaction.followup.send("No points have been recorded yet.")
         return
 
     embed = Embed(title="📊 Detailed Point Records", color=discord.Color.blue())
-    embed.description = "Showing individual event points for each member."
+    embed.description = "Showing individual event points for each member, sorted by total points."
 
-    # Sort users by total points to show high-scorers first
     sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
 
-    if not sorted_users:
-        await interaction.followup.send("No records found to display.")
-        return
-
-    # Limit to 25 users to stay within Discord's embed field limit
-    for user_id, data in sorted_users[:25]:
+    for user_id, data in sorted_users:
         try:
             member = await interaction.guild.fetch_member(int(user_id))
             name = member.display_name
         except (discord.NotFound, discord.HTTPException):
             name = f"Unknown User (ID: {user_id})"
-
+        
         total_points = data.get('total_points', 0)
         
-        # The field value will contain the breakdown
         event_details = []
-        if 'events' in data and data['events']:
-            for event_id, points in data['events'].items():
-                # Fetch event_type from config, fallback to event_id
-                event_config = EVENT_CONFIGS.get(event_id, {})
-                event_type = event_config.get('event_type', f'Event ID: {event_id}')
-                event_details.append(f"- `{event_type}`: {points:.2f} pts")
+        user_events = data.get('events', {})
+        if user_events:
+            for event_id, points in user_events.items():
+                event_type = EVENT_CONFIGS.get(str(event_id), {}).get('event_type', f'ID: {event_id}')
+                event_details.append(f"• **{event_type}**: `{points:.2f}`")
+        else:
+            event_details.append("No event participation recorded.")
+            
+        field_value = f"**Total: `{total_points:.2f}` points**\n" + "\n".join(event_details)
         
-        if not event_details:
-            event_details.append("No specific event points recorded.")
-
-        # Add a field for each user
-        embed.add_field(
-            name=f"👤 {name} (Total: {total_points:.2f} Points)",
-            value="\n".join(event_details),
-            inline=False
-        )
+        if len(embed.fields) < 25:
+             embed.add_field(name=name, value=field_value, inline=False)
+        else:
+            if "footer" not in embed.to_dict():
+                 embed.set_footer(text="Showing top 25 members with the most points.")
+            break 
 
     await interaction.followup.send(embed=embed)
-@event_group.command(name="summary", description="Displays the point leaderboard for the server.")
-async def summary(interaction: Interaction):
-    """Displays a ranked leaderboard of user points."""
-    # Defer the response to avoid timeouts, especially if fetching member names takes time
-    await interaction.response.defer(ephemeral=True)
-
-    if not points_data:
-        await interaction.followup.send("No points have been recorded yet.")
         return
 
-    # Sort users by total_points in descending order
+    embed = Embed(title="📊 Detailed Point Records", color=discord.Color.blue())
+    embed.description = "Showing individual event points for each member, sorted by total points."
+
     sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
 
-    embed = Embed(title="🏆 Activity Point Leaderboard", color=discord.Color.gold())
-
-    if not sorted_users:
-        embed.description = "The leaderboard is empty."
-    else:
-        leaderboard_lines = []
-        # Limit to top 20 to avoid exceeding Discord's embed description character limit
-        for i, (user_id, data) in enumerate(sorted_users[:20]):
-            try:
-                # Asynchronously fetch member to ensure up-to-date display_name
-                member = await interaction.guild.fetch_member(int(user_id))
-                name = member.display_name
-            except (discord.NotFound, discord.HTTPException):
-                # Fallback if member is no longer in the server
-                name = f"Unknown User (ID: {user_id})"
-            
-            points = data.get('total_points', 0)
-            # Format each line as: "1. Member Name: 123.45 Points"
-            leaderboard_lines.append(f"**{i+1}. {name}**: {points:.2f} Points")
+    for user_id, data in sorted_users:
+        try:
+            member = await interaction.guild.fetch_member(int(user_id))
+            name = member.display_name
+        except (discord.NotFound, discord.HTTPException):
+            name = f"Unknown User (ID: {user_id})"
         
-        # Join all lines into a single string for the description
-        embed.description = "\n".join(leaderboard_lines)
+        total_points = data.get('total_points', 0)
+        
+        event_details = []
+        user_events = data.get('events', {})
+        if user_events:
+            for event_id, points in user_events.items():
+                event_type = EVENT_CONFIGS.get(str(event_id), {}).get('event_type', f'ID: {event_id}')
+                event_details.append(f"• **{event_type}**: `{points:.2f}`")
+        else:
+            event_details.append("No event participation recorded.")
+            
+        field_value = f"**Total: `{total_points:.2f}` points**\n" + "\n".join(event_details)
+        
+        if len(embed.fields) < 25:
+             embed.add_field(name=name, value=field_value, inline=False)
+        else:
+            if "footer" not in embed.to_dict():
+                 embed.set_footer(text="Showing top 25 members with the most points.")
+            break 
 
-    # Use followup.send because we deferred the initial response
     await interaction.followup.send(embed=embed)
-@event_group.command(name="reset", description="[Admin Only] Resets all event data and points.")
-@app_commands.checks.has_permissions(administrator=True)
+
+@event_group.command(name="reset", description="Clears all event and point data. (Owner only)")
 async def reset(interaction: Interaction):
+    # A simple check to see if the user is the bot owner.
+    # For a real bot, you might want a more robust check (e.g., checking against guild owner ID).
+    if not await bot.is_owner(interaction.user):
+        await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
+        return
+        
     global active_events, points_data
     
-    # Clear in-memory data
     active_events.clear()
     points_data.clear()
     
-    # Clear data files
     save_data(ACTIVE_EVENTS_FILE, {})
     save_data(POINTS_FILE, {})
     
-    logging.warning(f"All data has been reset by {interaction.user} (ID: {interaction.user.id}).")
-    await interaction.response.send_message("✅ All event and point data has been successfully reset.", ephemeral=True)
+    await interaction.response.send_message("✅ All active events and point data have been reset.", ephemeral=True)
+    logging.warning(f"Data reset executed by {interaction.user.name} ({interaction.user.id}).")
 
-@reset.error
-async def on_reset_error(interaction: Interaction, error: app_commands.AppCommandError):
-    if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
-    else:
-        await interaction.response.send_message("An unexpected error occurred.", ephemeral=True)
-        logging.error(f"Error in /reset command: {error}")
-
-# --- Run Bot ---
+# --- Bot Execution ---
 if __name__ == "__main__":
     if DISCORD_TOKEN:
         bot.run(DISCORD_TOKEN)
-    else:
-        logging.error("Bot could not start: DISCORD_TOKEN is not set.")
