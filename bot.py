@@ -281,31 +281,26 @@ async def me(interaction: discord.Interaction):
 async def event_id_list(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     try:
-        # Load the configuration file to get event details
         with open(CONFIG_FILE, 'r') as f:
             config_data = json.load(f)
         
         events = config_data.get("events", [])
 
-        # Check if there are any events configured
         if not events:
             await interaction.followup.send("No events found in the configuration file.", ephemeral=True)
             return
 
-        # Create an embed to display the event list
-        embed = discord.Embed(
-            title="Available Event IDs",
-            description="Here is a list of all configured events.",
-            color=discord.Color.purple()
+        # Format the event list into a single string for the description
+        event_list_str = "\n".join(
+            f"**{event.get('event_id', 'N/A')}** - {event.get('event_type', 'N/A')}"
+            for event in events
         )
 
-        # Add a field for each event
-        for event in events:
-            embed.add_field(
-                name=f"ID: {event.get('event_id', 'N/A')}", 
-                value=f"Type: {event.get('event_type', 'N/A')}", 
-                inline=False
-            )
+        embed = discord.Embed(
+            title="Available Events",
+            description=event_list_str,
+            color=discord.Color.purple()
+        )
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
