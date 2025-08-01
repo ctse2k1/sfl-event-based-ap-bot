@@ -42,12 +42,12 @@
     },
     {
       "event_id": "501",
-      "event_type": "F4RC (Level 2) Bombing looking for fights faction capping",
+      "event_type": "Step5 : F4RC (Level 2) Bombing looking for fights faction capping",
       "points_per_minute": 5
     },
     {
       "event_id": "601",
-      "event_type": "Fights MIDSCALE BZ Outposts 1600IP + Commandos (Level 3) T8 Pregears",
+      "event_type": "Step6 : Fights MIDSCALE BZ Outposts 1600IP + Commandos (Level 3) T8 Pregears",
       "points_per_minute": 6
     },
     {
@@ -57,7 +57,7 @@
     },
     {
       "event_id": "702",
-      "event_type": "Group Dungeons zones 5&6/6 (Level 3)",
+      "event_type": "Step7 : Group Dungeons zones 5&6/6 (Level 3)",
       "points_per_minute": 7
     },
     {
