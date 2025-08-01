@@ -248,21 +248,33 @@ async def list_participants(interaction: discord.Interaction):
 @event_group.command(name="me", description="Shows your own event points and total points.")
 async def me(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    user_id = str(interaction.user.id)
-    all_records = load_data("event_records.json")
-    user_records = all_records.get(user_id, [])
+    try:
+        user_id = str(interaction.user.id)
+        all_data = load_data(RECORDS_FILE)
+        user_records = [rec for rec in all_data.get("records", []) if rec.get("user_id") == user_id]
 
-    if not user_records:
-        await interaction.followup.send("You have no activity point records yet.", ephemeral=True)
-        return
+        if not user_records:
+            await interaction.followup.send("You have no event records yet.", ephemeral=True)
+            return
 
-    total_points = sum(record.get('points_earned', 0) for record in user_records)
-    embed = discord.Embed(title=f"{interaction.user.display_name}'s Activity Points", description="Here is a summary of your event participation.", color=discord.Color.green())
-    for record in user_records:
-        embed.add_field(name=f"🎉 Event: {record.get('event_type', 'Unknown Event')}", value=f"⏱️ Duration: {record.get('duration_minutes', 0):.2f} minutes\n✨ Points: {record.get('points_earned', 0):.2f}", inline=False)
-    embed.set_footer(text=f"🏆 Total Points: {total_points:.2f}")
-    await interaction.followup.send(embed=embed, ephemeral=True)
+        total_points = sum(rec.get("points", 0) for rec in user_records)
 
+        embed = discord.Embed(
+            title=f"{interaction.user.display_name}'s Activity Points",
+            description="A summary of your event participation.",
+            color=discord.Color.blue()
+        )
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        embed.add_field(name="🏆 Total Points", value=f"**{total_points}**", inline=False)
+        embed.add_field(name="\u200b", value="\u200b", inline=False)
+
+        for record in user_records[:22]:  # Limit to 22 to fit in a single embed
+            embed.add_field(name=f"Event: {record.get('event_id', 'N/A')}", value=f"Points: {record.get('points', 0)}", inline=True)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    except Exception as e:
+        print(f"Error in /event me command: {e}")
+        await interaction.followup.send("An error occurred while fetching your records. Please try again later.", ephemeral=True)
 @event_group.command(name="records", description="Displays activity point records for all members (Admin only).")
 @app_commands.checks.has_permissions(administrator=True)
 async def records(interaction: discord.Interaction):
