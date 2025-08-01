@@ -12,6 +12,7 @@ from datetime import datetime
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 
+CONFIG_FILE = 'config.json'
 # --- LOAD CONFIGURATION ---
 try:
     with open('config.json', 'r') as f:
@@ -278,7 +279,7 @@ async def me(interaction: discord.Interaction):
 
 @event_group.command(name="id", description="Lists all available event IDs and their types.")
 async def event_id_list(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
+        with open(CONFIG_FILE, 'r') as f:
     try:
         with open(CONFIG_FILE, 'r') as f:
             config_data = json.load(f)
