@@ -293,32 +293,55 @@ async def records(interaction: Interaction):
     sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
 
     for user_id, data in sorted_users:
-        member = interaction.guild.get_member(int(user_id))
-        name = member.display_name if member else f"Unknown User (ID: {user_id})"
-        total_points = data.get('total_points', 0)
-        
-        user_record = f"**{name}** - Total: {total_points:.2f} Points\n"
-        
-        event_details = []
-        if 'events' in data:
-            for event_id, points in data['events'].items():
-                event_type = EVENT_CONFIGS.get(event_id, {}).get('event_type', 'Unknown Event')
-                event_details.append(f"  - `{event_type}`: {points:.2f} points")
-        
-        if event_details:
-            user_record += "\n".join(event_details)
-        else:
-            user_record += "  - No specific event points recorded."
+@event_group.command(name="records", description="Shows a detailed record of points for each user.")
+async def records(interaction: Interaction):
+    """Shows a detailed breakdown of points for each user."""
+    await interaction.response.defer(ephemeral=True)
 
-        records_text.append(user_record)
-
-    if not records_text:
-        await interaction.response.send_message("No point records found.", ephemeral=True)
+    if not points_data:
+        await interaction.followup.send("No points have been recorded yet.")
         return
 
-    embed.description = "\n\n".join(records_text)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    embed = Embed(title="📊 Detailed Point Records", color=discord.Color.blue())
+    embed.description = "Showing individual event points for each member."
 
+    # Sort users by total points to show high-scorers first
+    sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
+
+    if not sorted_users:
+        await interaction.followup.send("No records found to display.")
+        return
+
+    # Limit to 25 users to stay within Discord's embed field limit
+    for user_id, data in sorted_users[:25]:
+        try:
+            member = await interaction.guild.fetch_member(int(user_id))
+            name = member.display_name
+        except (discord.NotFound, discord.HTTPException):
+            name = f"Unknown User (ID: {user_id})"
+
+        total_points = data.get('total_points', 0)
+        
+        # The field value will contain the breakdown
+        event_details = []
+        if 'events' in data and data['events']:
+            for event_id, points in data['events'].items():
+                # Fetch event_type from config, fallback to event_id
+                event_config = EVENT_CONFIGS.get(event_id, {})
+                event_type = event_config.get('event_type', f'Event ID: {event_id}')
+                event_details.append(f"- `{event_type}`: {points:.2f} pts")
+        
+        if not event_details:
+            event_details.append("No specific event points recorded.")
+
+        # Add a field for each user
+        embed.add_field(
+            name=f"👤 {name} (Total: {total_points:.2f} Points)",
+            value="\n".join(event_details),
+            inline=False
+        )
+
+    await interaction.followup.send(embed=embed)
 @event_group.command(name="summary", description="Displays the point leaderboard for the server.")
 async def summary(interaction: Interaction):
     """Displays a ranked leaderboard of user points."""
