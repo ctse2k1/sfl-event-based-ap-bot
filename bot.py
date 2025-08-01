@@ -275,6 +275,38 @@ async def me(interaction: discord.Interaction):
     except Exception as e:
         print(f"Error in /event me command: {e}")
         await interaction.followup.send("An error occurred while fetching your records. Please try again later.", ephemeral=True)
+
+@event_group.command(name="id", description="Lists all available event IDs and their types.")
+async def event_id_list(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            config_data = json.load(f)
+        
+        events = config_data.get("events", [])
+
+        if not events:
+            await interaction.followup.send("No events found in the configuration file.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="Available Event IDs",
+            description="Here is a list of all configured events.",
+            color=discord.Color.purple()
+        )
+
+        for event in events:
+            embed.add_field(name=f"ID: {event.get('event_id', 'N/A')}", value=f"Type: {event.get('event_type', 'N/A')}", inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    except FileNotFoundError:
+        await interaction.followup.send(f"Error: The configuration file (`{CONFIG_FILE}`) was not found.", ephemeral=True)
+    except json.JSONDecodeError:
+        await interaction.followup.send(f"Error: The configuration file (`{CONFIG_FILE}`) is not a valid JSON file.", ephemeral=True)
+    except Exception as e:
+        print(f"Error in /event id command: {e}")
+        await interaction.followup.send("An unexpected error occurred while fetching the event IDs.", ephemeral=True)
+
 @event_group.command(name="records", description="Displays activity point records for all members (Admin only).")
 @app_commands.checks.has_permissions(administrator=True)
 async def records(interaction: discord.Interaction):
