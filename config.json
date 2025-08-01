@@ -1,19 +1,79 @@
 {
   "events": [
     {
-      "event_id": 101,
-      "event_type": "Community Game Night",
+      "event_id": "101",
+      "event_type": "Step1 : Group Dungeons from Portal (Level 1)",
+      "points_per_minute": 1
+    },
+    {
+      "event_id": "102",
+      "event_type": "Step1 : Tracking AvaRoads (Level 1)",
+      "points_per_minute": 1
+    },
+    {
+      "event_id": "103",
+      "event_type": "Step1 : F4RC (Level 1) PVE Faction Capping",
+      "points_per_minute": 1
+    },
+    {
+      "event_id": "104",
+      "event_type": "Step1 : Commandos Smallscale (Level 1) T6 Pregears",
+      "points_per_minute": 1
+    },
+    {
+      "event_id": "201",
+      "event_type": "Step2 : AvaDungeons T6-T7 (Level 1)",
       "points_per_minute": 2
     },
     {
-      "event_id": 102,
-      "event_type": "Coding Workshop",
+      "event_id": "301",
+      "event_type": "Step3 : PVP Training --> Commandos SMALLSCALE (Level 2) T7 Pregears",
       "points_per_minute": 3
     },
     {
-      "event_id": 103,
-      "event_type": "Art Contest",
-      "points_per_minute": 1
+      "event_id": "401",
+      "event_type": "Step4 : Elite T8+ AvaDungeons (Level 2)",
+      "points_per_minute": 4
+    },
+    {
+      "event_id": "402",
+      "event_type": "Step4 : Group Dungeons from HQ (Level 2)",
+      "points_per_minute": 4
+    },
+    {
+      "event_id": "501",
+      "event_type": "F4RC (Level 2) Bombing looking for fights faction capping",
+      "points_per_minute": 5
+    },
+    {
+      "event_id": "601",
+      "event_type": "Fights MIDSCALE BZ Outposts 1600IP + Commandos (Level 3) T8 Pregears",
+      "points_per_minute": 6
+    },
+    {
+      "event_id": "701",
+      "event_type": "Step7 : F4RC (Level3) Bandit ZvZ",
+      "points_per_minute": 7
+    },
+    {
+      "event_id": "702",
+      "event_type": "Group Dungeons zones 5&6/6 (Level 3)",
+      "points_per_minute": 7
+    },
+    {
+      "event_id": "801",
+      "event_type": "Step8 : Castle Fights",
+      "points_per_minute": 8
+    },
+    {
+      "event_id": "802",
+      "event_type": "Step8 : 300M Mammoth Hunts Fights",
+      "points_per_minute": 8
+    },
+    {
+      "event_id": "901",
+      "event_type": "Step9 : ZvZ Territories LARGESCALE + RZ Faction Domination",
+      "points_per_minute": 9
     }
   ]
 }
