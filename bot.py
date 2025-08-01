@@ -1,108 +1,137 @@
 import os
 import json
+import logging
 import discord
 from discord.ext import commands
-from discord import app_commands
+from discord import app_commands, Member, User, Interaction, Embed
 from dotenv import load_dotenv
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 
-# --- LOAD ENVIRONMENT VARIABLES ---
+# --- Basic Logging Setup ---
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)-8s] %(message)s')
+
+# --- Environment Variables ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+if not DISCORD_TOKEN:
+    logging.error("FATAL: DISCORD_TOKEN not found in .env file.")
+    exit()
 
+# --- Constants ---
 CONFIG_FILE = 'config.json'
-# --- LOAD CONFIGURATION ---
-try:
-    with open('config.json', 'r') as f:
-        config = json.load(f)
-        EVENT_CONFIGS = {str(event['event_id']): event for event in config['events']}
-except FileNotFoundError:
-    print("Error: config.json not found. Please create it and restart the bot.")
-    exit()
-except json.JSONDecodeError:
-    print("Error: config.json is not a valid JSON file. Please fix it and restart the bot.")
-    exit()
+DATA_DIR = 'data'
+ACTIVE_EVENTS_FILE = os.path.join(DATA_DIR, 'active_events.json')
+POINTS_FILE = os.path.join(DATA_DIR, 'points.json')
 
-# --- HELPER FUNCTIONS for DATA PERSISTENCE ---
-def save_data(file_name, data):
-    """Saves data to a JSON file, handling datetime objects."""
-    os.makedirs('data', exist_ok=True)
+# --- Ensure Data Directory Exists ---
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# --- Helper Functions for Data Persistence ---
+def save_data(file_path, data):
+    """Saves data to a JSON file with error handling."""
     try:
-        with open(os.path.join('data', file_name), 'w') as f:
-            def dt_converter(o):
-                if isinstance(o, datetime):
-                    return o.isoformat()
-            json.dump(data, f, indent=4, default=dt_converter)
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=4)
+    except IOError as e:
+        logging.error(f"Could not write to file {file_path}: {e}")
     except Exception as e:
-        print(f"Error saving data to {file_name}: {e}")
+        logging.error(f"An unexpected error occurred while saving data to {file_path}: {e}")
 
-def load_data(file_name):
-    """Loads data from a JSON file, returning an empty dict if not found or invalid."""
-    file_path = os.path.join('data', file_name)
-    if not os.path.exists(file_path):
-        return {}
+def load_data(file_path, default_data=None):
+    """Loads data from a JSON file, returning default data if not found or invalid."""
+    if default_data is None:
+        default_data = {}
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        save_data(file_path, default_data)
+        return default_data
     try:
         with open(file_path, 'r') as f:
-            content = f.read()
-            if not content:
-                return {}
-            return json.loads(content)
-    except (json.JSONDecodeError, FileNotFoundError):
-        return {}
+            return json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        logging.warning(f"Could not load data from {file_path}, returning default. Reason: {e}")
+        return default_data
 
-# --- HELPER FUNCTION for POINTS CALCULATION ---
-def calculate_points(start_time, end_time, ppm):
-    """Calculates points based on duration and points per minute."""
-    if isinstance(start_time, str):
-        start_time = datetime.fromisoformat(start_time)
-    if isinstance(end_time, str):
-        end_time = datetime.fromisoformat(end_time)
+# --- Load Initial Data ---
+try:
+    with open(CONFIG_FILE, 'r') as f:
+        EVENT_CONFIGS = {str(event['event_id']): event for event in json.load(f)['events']}
+except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+    logging.error(f"FATAL: Could not load or parse {CONFIG_FILE}. Please ensure it exists and is valid. Error: {e}")
+    exit()
+
+active_events = load_data(ACTIVE_EVENTS_FILE, {})
+points_data = load_data(POINTS_FILE, {})
+
+# --- Core Logic Functions ---
+def get_event_by_creator(creator_id):
+    """Finds an event hosted by a specific creator."""
+    creator_id_str = str(creator_id)
+    for event_code, event in active_events.items():
+        if event.get('creator_id') == creator_id_str:
+            return event_code, event
+    return None, None
+
+def calculate_and_finalize_points(member_id, event_code):
+    """Calculates points for a user, updates their record, and returns details."""
+    event = active_events.get(event_code)
+    if not event:
+        return None
+
+    member_id_str = str(member_id)
+    participant_info = event['participants'].get(member_id_str)
+    if not participant_info:
+        return None
+
+    event_config = EVENT_CONFIGS.get(str(event['event_id']))
+    if not event_config:
+        return None
+
+    start_time = datetime.fromisoformat(participant_info['join_time'])
+    end_time = datetime.now(timezone.utc)
     duration_seconds = (end_time - start_time).total_seconds()
     duration_minutes = duration_seconds / 60
-    return max(0, round(duration_minutes * ppm, 2)), max(0, round(duration_minutes, 2))
+    points = max(0, round(duration_minutes * event_config.get('points_per_minute', 0), 2))
 
-# --- BOT SETUP ---
+    # Update points data
+    user_points = points_data.setdefault(member_id_str, {'total_points': 0, 'events': {}})
+    event_id_str = str(event['event_id'])
+    user_points['events'][event_id_str] = user_points['events'].get(event_id_str, 0) + points
+    user_points['total_points'] = round(sum(user_points['events'].values()), 2)
+    
+    save_data(POINTS_FILE, points_data)
+    
+    return {"points": points, "duration": duration_minutes}
+
+# --- Bot Setup ---
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+event_group = app_commands.Group(name="event", description="Manage event activity points.")
 
 @bot.event
 async def on_ready():
-    """Event handler for when the bot logs in and is ready."""
-    print(f'Logged in as {bot.user} (ID: {bot.user.id})')
+    logging.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
     try:
-        print("Attempting to sync the following commands:")
-        command_list_str = []
-        for command in bot.tree.get_commands():
-            if isinstance(command, app_commands.Group):
-                command_list_str.append(f"- Command Group: {command.name}")
-                for subcommand in command.commands:
-                    command_list_str.append(f"  - Subcommand: {subcommand.name}")
-        print('\n'.join(sorted(command_list_str)))
+        bot.tree.add_command(event_group)
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command groups to Discord.")
+        logging.info(f"Synced {len(synced)} commands to Discord.")
     except Exception as e:
-        print(f"Failed to sync commands: {e}")
-    print('------')
+        logging.error(f"Error syncing commands: {e}")
 
-# --- SLASH COMMANDS ---
-event_group = app_commands.Group(name="event", description="Commands for managing event activity points.")
-
-@event_group.command(name="start", description="Starts an event and generates an event code.")
-@app_commands.describe(event_id="The ID of the event from the config file.")
-async def start(interaction: discord.Interaction, event_id: str):
-    await interaction.response.defer(ephemeral=True)
+# --- Slash Commands ---
+@event_group.command(name="start", description="Starts a new event and generates a join code.")
+@app_commands.describe(event_id="The unique ID of the event to start.")
+async def start(interaction: Interaction, event_id: str):
     creator_id = str(interaction.user.id)
-    active_events = load_data("active_events.json")
-    
-    if any(event['creator_id'] == creator_id for event in active_events.values()):
-        await interaction.followup.send("You are already hosting an event. Use `/event stop` to end it first.", ephemeral=True)
+    if get_event_by_creator(creator_id)[0]:
+        await interaction.response.send_message("❌ You are already hosting an event. Please stop it first.", ephemeral=True)
         return
 
     if event_id not in EVENT_CONFIGS:
-        await interaction.followup.send(f"Event ID `{event_id}` is invalid. Please check `config.json`.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Event ID `{event_id}` is not valid. Use `/event id` to see available IDs.", ephemeral=True)
         return
 
     event_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -110,280 +139,236 @@ async def start(interaction: discord.Interaction, event_id: str):
         event_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
 
     active_events[event_code] = {
-        "event_id": event_id,
         "creator_id": creator_id,
-        "start_time": datetime.utcnow(),
-        "participants": {}
+        "event_id": event_id,
+        "start_time": datetime.now(timezone.utc).isoformat(),
+        "participants": {
+            creator_id: {"join_time": datetime.now(timezone.utc).isoformat()}
+        }
     }
-    save_data("active_events.json", active_events)
+    save_data(ACTIVE_EVENTS_FILE, active_events)
     
+    embed = Embed(
+        title="🎉 Event Started!",
+        description=f"Your event `{EVENT_CONFIGS[event_id]['event_type']}` is now active.",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Join Code", value=f"**`{event_code}`**", inline=False)
+    embed.set_footer(text="Participants can now use this code with /event join.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@event_group.command(name="join", description="Joins an active event using a code.")
+@app_commands.describe(code="The 4-character code for the event.")
+async def join(interaction: Interaction, code: str):
+    event_code = code.upper()
+    if event_code not in active_events:
+        await interaction.response.send_message("❌ Invalid event code.", ephemeral=True)
+        return
+
+    participant_id = str(interaction.user.id)
+    if participant_id in active_events[event_code]['participants']:
+        await interaction.response.send_message("🤔 You have already joined this event.", ephemeral=True)
+        return
+
+    active_events[event_code]['participants'][participant_id] = {"join_time": datetime.now(timezone.utc).isoformat()}
+    save_data(ACTIVE_EVENTS_FILE, active_events)
+    
+    event_id = active_events[event_code]['event_id']
     event_type = EVENT_CONFIGS[event_id]['event_type']
-    await interaction.followup.send(f"Event '{event_type}' started! Your members can join with the code: **{event_code}**", ephemeral=True)
-    await interaction.channel.send(f"🎉 **{interaction.user.display_name}** has started the event: **'{event_type}'**! Join with the code provided by the host.")
+    await interaction.response.send_message(f"✅ You have successfully joined the event: **{event_type}**.", ephemeral=True)
 
-@event_group.command(name="join", description="Join an active event using the event code.")
-@app_commands.describe(event_code="The 4-character code for the event.")
-async def join(interaction: discord.Interaction, event_code: str):
-    await interaction.response.defer(ephemeral=True)
-    user_id = str(interaction.user.id)
-    code = event_code.upper()
-    active_events = load_data("active_events.json")
-
-    if code not in active_events:
-        await interaction.followup.send("Invalid event code.", ephemeral=True)
-        return
-
-    event = active_events[code]
-    if user_id == event['creator_id']:
-        await interaction.followup.send("You cannot join your own event as a participant.", ephemeral=True)
-        return
-    if user_id in event['participants']:
-        await interaction.followup.send("You have already joined this event.", ephemeral=True)
-        return
-
-    event['participants'][user_id] = datetime.utcnow()
-    save_data("active_events.json", active_events)
-    event_type = EVENT_CONFIGS[event['event_id']]['event_type']
-    await interaction.followup.send(f"You have successfully joined the event: '{event_type}'.", ephemeral=True)
-
-@event_group.command(name="stop", description="Stops the current event you created.")
-async def stop(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=False)
+@event_group.command(name="stop", description="Stops the event you are hosting and calculates points.")
+async def stop(interaction: Interaction):
     creator_id = str(interaction.user.id)
-    active_events = load_data("active_events.json")
-    event_records = load_data("event_records.json")
-    event_code = next((code for code, event in active_events.items() if event['creator_id'] == creator_id), None)
+    event_code, event = get_event_by_creator(creator_id)
 
-    if not event_code:
-        await interaction.followup.send("You are not hosting an event.", ephemeral=True)
+    if not event:
+        await interaction.response.send_message("❌ You are not currently hosting an event.", ephemeral=True)
         return
 
-    event = active_events[event_code]
-    event_config = EVENT_CONFIGS[event['event_id']]
-    ppm = event_config['points_per_minute']
-    end_time = datetime.utcnow()
+    await interaction.response.defer(ephemeral=True)
     
-    creator_start_time = datetime.fromisoformat(event['start_time'])
-    creator_points, creator_duration = calculate_points(creator_start_time, end_time, ppm)
-    if creator_id not in event_records: event_records[creator_id] = []
-    event_records[creator_id].append({"event_type": event_config['event_type'], "points_earned": creator_points, "duration_minutes": creator_duration})
-
-    for user_id, join_time_str in event['participants'].items():
-        join_time = datetime.fromisoformat(join_time_str)
-        points, duration = calculate_points(join_time, end_time, ppm)
-        if user_id not in event_records: event_records[user_id] = []
-        event_records[user_id].append({"event_type": event_config['event_type'], "points_earned": points, "duration_minutes": duration})
+    participant_ids = list(event['participants'].keys())
+    for pid in participant_ids:
+        calculate_and_finalize_points(pid, event_code)
 
     del active_events[event_code]
-    save_data("active_events.json", active_events)
-    save_data("event_records.json", event_records)
-    await interaction.followup.send(f"Event '{event_config['event_type']}' has been stopped. All points have been calculated and stored.", ephemeral=False)
-
-@event_group.command(name="kick", description="Kicks a participant from your event.")
-@app_commands.describe(member="The member to kick.")
-async def kick(interaction: discord.Interaction, member: discord.Member):
-    await interaction.response.defer(ephemeral=True)
-    creator_id = str(interaction.user.id)
-    user_to_kick_id = str(member.id)
-    active_events = load_data("active_events.json")
-    event_records = load_data("event_records.json")
-    event_code = next((code for code, event in active_events.items() if event['creator_id'] == creator_id), None)
-
-    if not event_code:
-        await interaction.followup.send("You are not hosting an event.", ephemeral=True)
-        return
-
-    event = active_events[event_code]
-    if user_to_kick_id not in event['participants']:
-        await interaction.followup.send(f"{member.display_name} is not in your event.", ephemeral=True)
-        return
-
-    event_config = EVENT_CONFIGS[event['event_id']]
-    ppm = event_config['points_per_minute']
-    end_time = datetime.utcnow()
-    join_time = datetime.fromisoformat(event['participants'][user_to_kick_id])
-    points, duration = calculate_points(join_time, end_time, ppm)
-
-    if user_to_kick_id not in event_records: event_records[user_to_kick_id] = []
-    event_records[user_to_kick_id].append({"event_type": event_config['event_type'], "points_earned": points, "duration_minutes": duration})
+    save_data(ACTIVE_EVENTS_FILE, active_events)
     
-    del event['participants'][user_to_kick_id]
-    save_data("active_events.json", active_events)
-    save_data("event_records.json", event_records)
-    await interaction.followup.send(f"You have kicked {member.display_name}. They have been awarded {points:.2f} points for their participation.", ephemeral=True)
+    event_type = EVENT_CONFIGS[event['event_id']]['event_type']
+    await interaction.followup.send(f"✅ Event **{event_type}** has been stopped. Points awarded to all participants.", ephemeral=True)
 
-@event_group.command(name="list", description="Lists participants in your current event.")
-async def list_participants(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
+@event_group.command(name="kick", description="Removes a participant from your event.")
+@app_commands.describe(member="The member to remove from the event.")
+async def kick(interaction: Interaction, member: Member):
     creator_id = str(interaction.user.id)
-    active_events = load_data("active_events.json")
-    event_code = next((code for code, event in active_events.items() if event['creator_id'] == creator_id), None)
+    event_code, event = get_event_by_creator(creator_id)
 
-    if not event_code:
-        await interaction.followup.send("You are not currently hosting an event.", ephemeral=True)
+    if not event:
+        await interaction.response.send_message("❌ You are not currently hosting an event.", ephemeral=True)
         return
 
-    participants_list = active_events[event_code].get('participants', {})
-    if not participants_list:
-        await interaction.followup.send("No one has joined your event yet.", ephemeral=True)
+    member_id_str = str(member.id)
+    if member_id_str not in event['participants']:
+        await interaction.response.send_message(f"❌ {member.display_name} is not in your event.", ephemeral=True)
+        return
+        
+    if member_id_str == creator_id:
+        await interaction.response.send_message("❌ You cannot kick yourself. Use `/event stop` to end the event.", ephemeral=True)
         return
 
-    event_config = EVENT_CONFIGS[active_events[event_code]['event_id']]
-    embed = discord.Embed(title=f"Participants in '{event_config['event_type']}'", description=f"Event Code: **{event_code}**", color=discord.Color.blue())
-    details = []
-    now = datetime.utcnow()
-    for user_id, join_time_str in participants_list.items():
-        try:
-            user = await bot.fetch_user(int(user_id))
-            join_time = datetime.fromisoformat(join_time_str)
-            duration = now - join_time
-            hours, rem = divmod(duration.total_seconds(), 3600)
-            mins, _ = divmod(rem, 60)
-            details.append(f"• **{user.display_name}** (Joined for {int(hours)}h {int(mins)}m)")
-        except (discord.NotFound, ValueError):
-            details.append(f"• Unknown User (`{user_id}`)")
-    if details:
-        embed.add_field(name="Current Participants", value="\n".join(details), inline=False)
-    await interaction.followup.send(embed=embed, ephemeral=True)
+    result = calculate_and_finalize_points(member_id_str, event_code)
+    del event['participants'][member_id_str]
+    save_data(ACTIVE_EVENTS_FILE, active_events)
 
-@event_group.command(name="me", description="Shows your own event points and total points.")
-async def me(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    try:
-        user_id = str(interaction.user.id)
-        all_data = load_data(RECORDS_FILE)
-        user_records = [rec for rec in all_data.get("records", []) if rec.get("user_id") == user_id]
+    points_msg = f"{result['points']:.2f} points" if result else "0 points"
+    await interaction.response.send_message(f"✅ {member.display_name} has been kicked and awarded {points_msg}.", ephemeral=True)
 
-        if not user_records:
-            await interaction.followup.send("You have no event records yet.", ephemeral=True)
-            return
+@event_group.command(name="list", description="Lists all participants in your current event.")
+async def list_participants(interaction: Interaction):
+    creator_id = str(interaction.user.id)
+    event_code, event = get_event_by_creator(creator_id)
 
-        total_points = sum(rec.get("points", 0) for rec in user_records)
+    if not event:
+        await interaction.response.send_message("❌ You are not currently hosting an event.", ephemeral=True)
+        return
 
-        embed = discord.Embed(
-            title=f"{interaction.user.display_name}'s Activity Points",
-            description="A summary of your event participation.",
-            color=discord.Color.blue()
-        )
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        embed.add_field(name="🏆 Total Points", value=f"**{total_points}**", inline=False)
-        embed.add_field(name="\u200b", value="\u200b", inline=False)
+    participant_ids = event['participants'].keys()
+    if not participant_ids:
+        await interaction.response.send_message("텅 Your event has no participants yet.", ephemeral=True)
+        return
+        
+    participant_list = []
+    for pid in participant_ids:
+        member = interaction.guild.get_member(int(pid))
+        participant_list.append(member.display_name if member else f"Unknown User (ID: {pid})")
 
-        for record in user_records[:22]:  # Limit to 22 to fit in a single embed
-            embed.add_field(name=f"Event: {record.get('event_id', 'N/A')}", value=f"Points: {record.get('points', 0)}", inline=True)
+    event_type = EVENT_CONFIGS[event['event_id']]['event_type']
+    embed = Embed(title=f"Participants in '{event_type}'", description="> " + "\n> ".join(participant_list), color=discord.Color.blue())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
-    except Exception as e:
-        print(f"Error in /event me command: {e}")
-        await interaction.followup.send("An error occurred while fetching your records. Please try again later.", ephemeral=True)
+@event_group.command(name="me", description="Shows your total activity points and event history.")
+async def me(interaction: Interaction):
+    user_id = str(interaction.user.id)
+    user_data = points_data.get(user_id)
+
+    if not user_data or not user_data.get('events'):
+        await interaction.response.send_message("You have not participated in any events yet.", ephemeral=True)
+        return
+
+    embed = Embed(title="Your Activity Points", color=discord.Color.purple())
+    embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+    embed.add_field(name="Total Points", value=f"**{user_data.get('total_points', 0):.2f}**", inline=False)
+
+    event_details = []
+    for event_id, points in user_data['events'].items():
+        event_type = EVENT_CONFIGS.get(event_id, {}).get('event_type', 'Unknown Event')
+        event_details.append(f"**{event_type}**: {points:.2f} points")
+    
+    if event_details:
+        embed.add_field(name="Points by Event", value="\n".join(event_details), inline=False)
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @event_group.command(name="id", description="Lists all available event IDs and their types.")
-async def event_id_list(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    try:
-        with open(CONFIG_FILE, 'r') as f:
-            config_data = json.load(f)
+async def id(interaction: Interaction):
+    if not EVENT_CONFIGS:
+        await interaction.response.send_message("No event types are configured.", ephemeral=True)
+        return
+    
+    embed = Embed(title="Available Event Types", color=discord.Color.teal())
+    id_list = [f"`{eid}` - {details['event_type']}" for eid, details in EVENT_CONFIGS.items()]
+    embed.description = "\n".join(id_list)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@event_group.command(name="records", description="Shows a detailed record of points for each user.")
+async def records(interaction: Interaction):
+    if not points_data:
+        await interaction.response.send_message("No points have been recorded yet.", ephemeral=True)
+        return
+
+    embed = Embed(title="Detailed Point Records", color=discord.Color.blue())
+    
+    records_text = []
+    sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
+
+    for user_id, data in sorted_users:
+        member = interaction.guild.get_member(int(user_id))
+        name = member.display_name if member else f"Unknown User (ID: {user_id})"
+        total_points = data.get('total_points', 0)
         
-        events = config_data.get("events", [])
+        user_record = f"**{name}** - Total: {total_points:.2f} Points\n"
+        
+        event_details = []
+        if 'events' in data:
+            for event_id, points in data['events'].items():
+                event_type = EVENT_CONFIGS.get(event_id, {}).get('event_type', 'Unknown Event')
+                event_details.append(f"  - `{event_type}`: {points:.2f} points")
+        
+        if event_details:
+            user_record += "\n".join(event_details)
+        else:
+            user_record += "  - No specific event points recorded."
 
-        if not events:
-            await interaction.followup.send("No events found in the configuration file.", ephemeral=True)
-            return
+        records_text.append(user_record)
 
-        # Format the event list into a single string for the description
-        event_list_str = "\n".join(
-            f"**{event.get('event_id', 'N/A')}** - {event.get('event_type', 'N/A')}"
-            for event in events
-        )
-
-        embed = discord.Embed(
-            title="Available Events",
-            description=event_list_str,
-            color=discord.Color.purple()
-        )
-
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-    except FileNotFoundError:
-        await interaction.followup.send(f"Error: The configuration file (`{CONFIG_FILE}`) was not found.", ephemeral=True)
-    except json.JSONDecodeError:
-        await interaction.followup.send(f"Error: The configuration file (`{CONFIG_FILE}`) is not a valid JSON file.", ephemeral=True)
-    except Exception as e:
-        print(f"Error in /event id command: {e}")
-        await interaction.followup.send("An unexpected error occurred while fetching the event IDs.", ephemeral=True)
-@event_group.command(name="records", description="Displays activity point records for all members (Admin only).")
-@app_commands.checks.has_permissions(administrator=True)
-async def records(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    all_records = load_data("event_records.json")
-
-    if not all_records:
-        await interaction.followup.send("There are no event records yet.", ephemeral=True)
+    if not records_text:
+        await interaction.response.send_message("No point records found.", ephemeral=True)
         return
 
-    embed = discord.Embed(title="All Member Activity Records", color=discord.Color.orange())
-    for user_id, user_records in all_records.items():
-        try:
-            user = await bot.fetch_user(int(user_id))
-            display_name = user.display_name
-        except (discord.NotFound, ValueError):
-            display_name = f"Unknown User ({user_id})"
-        record_details = [f"  - {rec.get('event_type', 'Unknown')}: {rec.get('points_earned', 0):.2f} pts" for rec in user_records]
-        if record_details:
-            embed.add_field(name=f"👤 {display_name}", value="\n".join(record_details), inline=False)
-    await interaction.followup.send(embed=embed, ephemeral=True)
+    embed.description = "\n\n".join(records_text)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@event_group.command(name="summary", description="Shows a leaderboard of total points.")
-async def summary(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=False)
-    all_records = load_data("event_records.json")
-    if not all_records:
-        await interaction.followup.send("There are no event records to summarize.", ephemeral=True)
+@event_group.command(name="summary", description="Displays the point leaderboard for the server.")
+async def summary(interaction: Interaction):
+    if not points_data:
+        await interaction.response.send_message("No points have been recorded yet.", ephemeral=True)
         return
 
-    leaderboard = {user_id: sum(r.get('points_earned', 0) for r in recs) for user_id, recs in all_records.items()}
-    if not any(leaderboard.values()):
-        await interaction.followup.send("No points have been awarded yet.", ephemeral=True)
-        return
-
-    sorted_leaderboard = sorted(leaderboard.items(), key=lambda item: item[1], reverse=True)
-    embed = discord.Embed(title="🏆 Event Points Leaderboard 🏆", color=discord.Color.gold())
+    sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
+    
+    embed = Embed(title="🏆 Activity Point Leaderboard", color=discord.Color.gold())
+    
     description = []
-    medals = ["🥇", "🥈", "🥉"]
-    for i, (user_id, total_points) in enumerate(sorted_leaderboard[:10]):
-        try:
-            user = await bot.fetch_user(int(user_id))
-            display_name = user.display_name
-        except (discord.NotFound, ValueError):
-            display_name = f"Unknown User ({user_id})"
-        prefix = medals[i] if i < 3 else f"**#{i+1}**"
-        description.append(f"{prefix} {display_name}: **{total_points:.2f} points**")
-    embed.description = "\n".join(description)
-    await interaction.followup.send(embed=embed)
+    for i, (user_id, data) in enumerate(sorted_users[:20]): # Limit to top 20
+        member = interaction.guild.get_member(int(user_id))
+        name = member.display_name if member else f"Unknown User (ID: {user_id})"
+        points = data.get('total_points', 0)
+        description.append(f"**{i+1}. {name}** - {points:.2f} Points")
+        
+    if not description:
+        await interaction.response.send_message("The leaderboard is empty.", ephemeral=True)
+        return
 
-@event_group.command(name="reset", description="Clears all event data (Admin only).")
+    embed.description = "\n".join(description)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+@event_group.command(name="reset", description="[Admin Only] Resets all event data and points.")
 @app_commands.checks.has_permissions(administrator=True)
-async def reset(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    save_data("active_events.json", {})
-    save_data("event_records.json", {})
-    await interaction.followup.send("All event data has been reset.", ephemeral=True)
+async def reset(interaction: Interaction):
+    global active_events, points_data
+    
+    # Clear in-memory data
+    active_events.clear()
+    points_data.clear()
+    
+    # Clear data files
+    save_data(ACTIVE_EVENTS_FILE, {})
+    save_data(POINTS_FILE, {})
+    
+    logging.warning(f"All data has been reset by {interaction.user} (ID: {interaction.user.id}).")
+    await interaction.response.send_message("✅ All event and point data has been successfully reset.", ephemeral=True)
 
 @reset.error
-@records.error
-async def permission_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+async def on_reset_error(interaction: Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
     else:
-        print(f"An error occurred in a command: {error}")
-        if not interaction.response.is_done():
-            await interaction.response.send_message("An unexpected error occurred.", ephemeral=True)
-        else:
-            await interaction.followup.send("An unexpected error occurred.", ephemeral=True)
+        await interaction.response.send_message("An unexpected error occurred.", ephemeral=True)
+        logging.error(f"Error in /reset command: {error}")
 
-bot.tree.add_command(event_group)
-
-if DISCORD_TOKEN and DISCORD_TOKEN != "YOUR_DISCORD_BOT_TOKEN":
-    bot.run(DISCORD_TOKEN)
-else:
-    print("FATAL: DISCORD_TOKEN is not set or is still the default value. Please check your .env file.")
+# --- Run Bot ---
+if __name__ == "__main__":
+    if DISCORD_TOKEN:
+        bot.run(DISCORD_TOKEN)
+    else:
+        logging.error("Bot could not start: DISCORD_TOKEN is not set.")
