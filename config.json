@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "event_id": 101,
+      "event_type": "Community Game Night",
+      "points_per_minute": 2
+    },
+    {
+      "event_id": 102,
+      "event_type": "Coding Workshop",
+      "points_per_minute": 3
+    },
+    {
+      "event_id": 103,
+      "event_type": "Art Contest",
+      "points_per_minute": 1
+    }
+  ]
+}
