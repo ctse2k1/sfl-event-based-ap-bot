@@ -321,30 +321,42 @@ async def records(interaction: Interaction):
 
 @event_group.command(name="summary", description="Displays the point leaderboard for the server.")
 async def summary(interaction: Interaction):
+    """Displays a ranked leaderboard of user points."""
+    # Defer the response to avoid timeouts, especially if fetching member names takes time
+    await interaction.response.defer(ephemeral=True)
+
     if not points_data:
-        await interaction.response.send_message("No points have been recorded yet.", ephemeral=True)
+        await interaction.followup.send("No points have been recorded yet.")
         return
 
+    # Sort users by total_points in descending order
     sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
-    if not points_data:
-        await interaction.response.send_message("No points have been recorded yet.", ephemeral=True)
-        return
 
-    sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
-    
     embed = Embed(title="🏆 Activity Point Leaderboard", color=discord.Color.gold())
-    
+
     if not sorted_users:
         embed.description = "The leaderboard is empty."
     else:
-        for i, (user_id, data) in enumerate(sorted_users[:20]): # Limit to top 20
-            member = interaction.guild.get_member(int(user_id))
-            name = member.display_name if member else f"Unknown User (ID: {user_id})"
+        leaderboard_lines = []
+        # Limit to top 20 to avoid exceeding Discord's embed description character limit
+        for i, (user_id, data) in enumerate(sorted_users[:20]):
+            try:
+                # Asynchronously fetch member to ensure up-to-date display_name
+                member = await interaction.guild.fetch_member(int(user_id))
+                name = member.display_name
+            except (discord.NotFound, discord.HTTPException):
+                # Fallback if member is no longer in the server
+                name = f"Unknown User (ID: {user_id})"
+            
             points = data.get('total_points', 0)
-            embed.add_field(name=f"#{i+1} {name}", value=f"{points:.2f} Points", inline=False)
+            # Format each line as: "1. Member Name: 123.45 Points"
+            leaderboard_lines.append(f"**{i+1}. {name}**: {points:.2f} Points")
         
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+        # Join all lines into a single string for the description
+        embed.description = "\n".join(leaderboard_lines)
+
+    # Use followup.send because we deferred the initial response
+    await interaction.followup.send(embed=embed)
 @event_group.command(name="reset", description="[Admin Only] Resets all event data and points.")
 @app_commands.checks.has_permissions(administrator=True)
 async def reset(interaction: Interaction):
