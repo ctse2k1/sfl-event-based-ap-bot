@@ -326,21 +326,24 @@ async def summary(interaction: Interaction):
         return
 
     sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
+    if not points_data:
+        await interaction.response.send_message("No points have been recorded yet.", ephemeral=True)
+        return
+
+    sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
     
     embed = Embed(title="🏆 Activity Point Leaderboard", color=discord.Color.gold())
     
-    description = []
-    for i, (user_id, data) in enumerate(sorted_users[:20]): # Limit to top 20
-        member = interaction.guild.get_member(int(user_id))
-        name = member.display_name if member else f"Unknown User (ID: {user_id})"
-        points = data.get('total_points', 0)
-        description.append(f"**{i+1}. {name}** - {points:.2f} Points")
+    if not sorted_users:
+        embed.description = "The leaderboard is empty."
+    else:
+        for i, (user_id, data) in enumerate(sorted_users[:20]): # Limit to top 20
+            member = interaction.guild.get_member(int(user_id))
+            name = member.display_name if member else f"Unknown User (ID: {user_id})"
+            points = data.get('total_points', 0)
+            embed.add_field(name=f"#{i+1} {name}", value=f"{points:.2f} Points", inline=False)
         
-    if not description:
-        await interaction.response.send_message("The leaderboard is empty.", ephemeral=True)
-        return
-
-    embed.description = "\n".join(description)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 @event_group.command(name="reset", description="[Admin Only] Resets all event data and points.")
 @app_commands.checks.has_permissions(administrator=True)
