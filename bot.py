@@ -289,10 +289,75 @@ async def records(interaction: Interaction):
 
     embed = Embed(title="Detailed Point Records", color=discord.Color.blue())
     
-    records_text = []
+    id_list = [f"`{eid}` - {details['event_type']}" for eid, details in EVENT_CONFIGS.items()]
     sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
 
-    for user_id, data in sorted_users:
+        return
+
+    event = active_events[active_event_code]
+    participants = event.get('participants', {})
+
+    if not participants:
+        await interaction.response.send_message("There are no participants in your event yet.", ephemeral=True)
+        return
+
+    embed = Embed(
+        title=f"👥 Participants in Event `{event['event_id']}`",
+@event_group.command(name="me", description="Shows your own total points and event breakdown.")
+async def me(interaction: Interaction):
+    """Shows the calling user their own point summary."""
+    await interaction.response.defer(ephemeral=True)
+    
+    user_id = str(interaction.user.id)
+
+    if user_id not in points_data or not points_data[user_id]:
+        await interaction.followup.send("You do not have any points recorded yet.", ephemeral=True)
+        return
+
+    user_data = points_data[user_id]
+    total_points = user_data.get('total_points', 0)
+    
+    embed = Embed(
+        title="My Activity Points",
+@event_group.command(name="summary", description="Displays the point leaderboard for the server.")
+async def summary(interaction: Interaction):
+    """Displays a ranked leaderboard of user points."""
+    await interaction.response.defer(ephemeral=True)
+
+    if not points_data:
+        await interaction.followup.send("No points have been recorded yet.")
+        return
+
+    sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
+
+    embed = Embed(title="🏆 Activity Point Leaderboard", color=discord.Color.gold())
+
+    if not sorted_users:
+        embed.description = "The leaderboard is empty."
+    else:
+        leaderboard_lines = []
+        for i, (user_id, data) in enumerate(sorted_users[:20]):
+            try:
+                member = await interaction.guild.fetch_member(int(user_id))
+                name = member.display_name
+            except (discord.NotFound, discord.HTTPException):
+                name = f"Unknown User (ID: {user_id})"
+            
+            total_points = data.get('total_points', 0)
+            leaderboard_lines.append(f"**{i+1}.** {name} - `{total_points:.2f}` points")
+
+        embed.description = "\n".join(leaderboard_lines)
+
+    await interaction.followup.send(embed=embed)
+            member = await interaction.guild.fetch_member(int(user_id))
+            participant_list.append(f"- {member.display_name}")
+        except (discord.NotFound, discord.HTTPException):
+            participant_list.append(f"- Unknown User (ID: {user_id})")
+    
+    embed.add_field(name="Current Participants", value="\n".join(participant_list), inline=False)
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @event_group.command(name="records", description="Shows a detailed record of points for each user.")
 async def records(interaction: Interaction):
     """Shows a detailed breakdown of points for each user."""
