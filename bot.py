@@ -350,6 +350,38 @@ async def records(interaction: Interaction, member: Member):
     else:
         embed.description = "No specific event points found."
 
+
+@event_group.command(name="reset", description="[ADMIN] Clears all event data and points.")
+@app_commands.checks.has_permissions(administrator=True)
+async def reset(interaction: Interaction):
+    """Clears all active events and recorded points."""
+    global active_events, points_data
+    
+    # Clear data in memory
+    active_events.clear()
+    points_data.clear()
+    
+    # Clear data in files
+    save_data(ACTIVE_EVENTS_FILE, {})
+    save_data(POINTS_FILE, {})
+    
+    await interaction.response.send_message(
+        "**⚠️ All event data and points have been reset.**",
+        ephemeral=True
+    )
+
+@reset.error
+async def reset_error(interaction: Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "❌ You do not have permission to use this command.",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"An unexpected error occurred: {error}",
+            ephemeral=True
+        )
     total_points = user_data.get('total_points', 0)
     embed.set_footer(text=f"Total Points: {total_points:.2f}")
     
