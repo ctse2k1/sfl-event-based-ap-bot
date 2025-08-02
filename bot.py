@@ -107,6 +107,8 @@ def calculate_and_finalize_points(member_id, event_code):
 # --- Bot Setup ---
 intents = discord.Intents.default()
 intents.members = True
+intents = discord.Intents.default()
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 event_group = app_commands.Group(name="event", description="Manage event activity points.")
 
