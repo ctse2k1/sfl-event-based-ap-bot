@@ -293,23 +293,6 @@ async def id(interaction: Interaction):
 
 @event_group.command(name="summary", description="Displays the point leaderboard for the server.")
 async def summary(interaction: Interaction):
-@event_group.command(name="reset", description="Clears all event data and points. (Admin Only)")
-@app_commands.checks.has_permissions(administrator=True)
-async def reset(interaction: Interaction):
-    """Clears all active events and points data."""
-    global active_events, points_data
-    
-    # Clear the in-memory variables
-    active_events.clear()
-    points_data.clear()
-    
-    # Save the empty state to files
-    save_data(ACTIVE_EVENTS_FILE, {})
-    save_data(POINTS_FILE, {})
-    
-    logging.info(f"All data cleared by {interaction.user} (ID: {interaction.user.id}).")
-    await interaction.response.send_message("✅ All event data and points have been successfully reset.", ephemeral=True)
-
     await interaction.response.defer(ephemeral=False)
 
     points_data = load_data(POINTS_FILE, {})
