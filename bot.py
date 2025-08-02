@@ -135,9 +135,9 @@ async def start(interaction: Interaction, event_id: str):
         await interaction.response.send_message(f"❌ Event ID `{event_id}` is not valid. Use `/event id` to see available IDs.", ephemeral=True)
         return
 
-    event_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    event_code = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
     while event_code in active_events:
-        event_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        event_code = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
 
     active_events[event_code] = {
         "creator_id": creator_id,
@@ -161,7 +161,7 @@ async def start(interaction: Interaction, event_id: str):
 @event_group.command(name="join", description="Joins an active event using a code.")
 @app_commands.describe(code="The 4-character code for the event.")
 async def join(interaction: Interaction, code: str):
-    event_code = code.upper()
+    event_code = code.lower()
     if event_code not in active_events:
         await interaction.response.send_message("❌ Invalid event code.", ephemeral=True)
         return
