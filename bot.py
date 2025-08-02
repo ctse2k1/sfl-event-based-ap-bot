@@ -24,6 +24,7 @@ CONFIG_FILE = 'config.json'
 DATA_DIR = 'data'
 ACTIVE_EVENTS_FILE = os.path.join(DATA_DIR, 'active_events.json')
 POINTS_FILE = os.path.join(DATA_DIR, 'points.json')
+EVENT_RECORDS_FILE = os.path.join(DATA_DIR, 'event_records.json')
 
 # --- Ensure Data Directory Exists ---
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -99,6 +100,20 @@ def calculate_and_finalize_points(member_id, event_code):
     event_id_str = str(event['event_id'])
     user_points['events'][event_id_str] = user_points['events'].get(event_id_str, 0) + points
     user_points['total_points'] = round(sum(user_points['events'].values()), 2)
+    # Save raw event record
+    event_records = load_data(EVENT_RECORDS_FILE, [])
+    event_record = {
+        'user_id': member_id_str,
+        'event_id': event['event_id'],
+        'event_type': event_config.get('event_type'),
+        'start_time': start_time.isoformat(),
+        'end_time': end_time.isoformat(),
+        'duration_minutes': round(duration_minutes, 2),
+        'points_earned': points
+    }
+    event_records.append(event_record)
+    save_data(EVENT_RECORDS_FILE, event_records)
+
     
     save_data(POINTS_FILE, points_data)
     
