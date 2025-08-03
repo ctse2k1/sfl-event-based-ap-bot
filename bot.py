@@ -317,7 +317,7 @@ async def me(interaction: Interaction):
     await interaction.response.defer(ephemeral=True)
 
     embed = Embed(
-        title="f"{interaction.user.display_name}'s Participation Records",
+        title=f"{interaction.user.display_name}'s Participation Records",
         description="A log of all recorded event participation.",
         color=interaction.user.color
     )
@@ -391,13 +391,7 @@ async def summary(interaction: Interaction):
         return
 
     leaderboard_text = ""
-    for i, (user_id, data) in enumerate(sorted_users[:50], 1):
-        try:
-            member = await interaction.guild.fetch_member(int(user_id))
-            member_name = member.display_name
-        except (discord.NotFound, discord.HTTPException):
-            member_name = f"Unknown User (ID: {user_id})"
-        
+    for i, (member_name, data) in enumerate(sorted_users[:50], 1):
         total_points = data.get('total_points', 0)
         leaderboard_text += f"**{i}.** {member_name} - **{total_points:.2f}** points\n"
 
