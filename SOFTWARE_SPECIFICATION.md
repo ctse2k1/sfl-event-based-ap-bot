@@ -43,7 +43,6 @@ The system is a single Python application that connects to the Discord Gateway A
 - **FR1.3: Join Event:** Any user can join an active event using a 4-character code.
 - **FR1.4: Kick from Event:** The event host can remove a participant from the event.
 - **FR1.5: List Participants:** The event host can list all participants in their event.
-- **FR1.6: Reset Member Data:** An event host must be able to reset the points and participation history for a specific member.
 
 ### 3.2. Point Calculation and Tracking
 - **FR2.1: Participant Tracking:** The bot must track all users who have joined an event.
@@ -56,6 +55,29 @@ The system is a single Python application that connects to the Discord Gateway A
 - **FR3.2: Participation Records:** All finalized participation records must be saved to `event_records.json`.
 
 ### 3.4. User-Facing Commands
-- **FR4.1: Me Command:** A user must be able to view their own participation history and total points.
-- **FR4.2: Summary Command:** Any user must be able to view a server-wide leaderboard of points.
-- **FR4.3: ID Command:** Any user must be able to list all available event types and their IDs.
+- **FR4.1: Me Command (`/event me`):** A user must be able to view their own participation history and total points.
+- **FR4.2: Summary Command (`/event summary`):** Any user must be able to view a server-wide leaderboard of points.
+- **FR4.3: ID Command (`/event id`):** Any user must be able to list all available event types and their IDs.
+
+### 3.5. Administrative Commands
+- **FR5.1: Reset All Data (`/event reset`):** An administrator must be able to reset all event data, including participation history and points for all users. This command requires no parameters.
+- **FR5.2: Reset Member Data (`/event resetmember`):** An administrator must be able to reset the points and participation history for a specific member.
+
+## 4. Non-Functional Requirements
+
+### 4.1. Performance
+- **NFR1.1:** The bot should respond to commands within 3 seconds.
+- **NFR1.2:** The bot should handle at least 5 concurrent events without significant performance degradation.
+
+### 4.2. Reliability
+- **NFR2.1:** The bot should have an uptime of 99.5%.
+- **NFR2.2:** The bot must gracefully handle unexpected disconnections from Discord and attempt to reconnect automatically.
+- **NFR2.3:** In case of a crash or restart, the bot must restore the state of active events from `active_events.json`.
+
+### 4.3. Usability
+- **NFR3.1:** Command responses should be clear, concise, and provide user-friendly error messages.
+- **NFR3.2:** The bot's functionality should be easily discoverable through a help command or documentation.
+
+### 4.4. Security
+- **NFR4.1:** The Discord bot token must be stored securely and not exposed in the source code.
+- **NFR4.2:** Administrative commands must be restricted to users with appropriate roles/permissions.

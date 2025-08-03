@@ -26,7 +26,7 @@ The SFL Event-Based Activity Point Bot is a specialized Discord bot designed to 
 - `/event stop`: Stops the event you are hosting and calculates points.
 - `/event kick <member>`: Removes a participant from your event.
 - `/event list`: Lists all participants in your current event.
-- `/event reset <member>`: Resets the points and participation history for a specific member.
+- `/event reset`: Resets the points and participation history for all users.
 
 ## 4. Installation & Setup
 
