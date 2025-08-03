@@ -405,7 +405,7 @@ async def records(interaction: Interaction):
 
         event_date = datetime.fromisoformat(record['start_time']).strftime('%Y-%m-%d %H:%M')
         duration_mins = record.get('duration_minutes', 0.0)
-        points = record.get('points_calculated', 0.0)
+        points = record.get('points_earned', 0.0)
         event_type = record.get('event_type', 'Unknown')
         
         field_value = (
