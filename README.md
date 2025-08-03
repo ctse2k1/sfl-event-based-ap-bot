@@ -1,43 +1,25 @@
 # SFL Event-Based Activity Point Bot
 
-This Discord bot is designed to manage and track member participation in guild events. It allows event organizers to start events, and participants to join them. The bot automatically calculates and awards "activity points" based on the time a user spends in an event, featuring a server-wide leaderboard to encourage engagement.
+This Discord bot allows server members to earn activity points by participating in events. Event hosts can start and stop events, and the bot will automatically track participation time and award points accordingly. It features a leaderboard, personal point tracking, and administrative controls.
 
-## Features
+## ✨ Features
 
-- **Slash Commands**: All interactions with the bot are done through intuitive and easy-to-use Discord slash commands under the `/event` group.
-- **Event Management**:
-    - Start events with a specific type (e.g., dungeons, PvP, ZvZ).
-    - A unique, temporary 4-character join code is generated for each event.
-    - Stop events at any time, which automatically calculates points for all participants.
-- **Automated Point Calculation**: Points are awarded based on the duration of participation. The rate of points per minute is configurable for each event type.
-- **Participant Management**: Event hosts can kick participants if necessary and view a list of everyone currently in their event.
-- **Leaderboard & Stats**:
-    - Users can check their own total points and a breakdown by event type using `/event me`.
-    - A public leaderboard (`/event summary`) displays the top members by activity points.
-- **Data Persistence**: The bot saves all data (active events, user points, event logs) to local JSON files, ensuring data integrity across restarts.
-- **Configuration**: Event types and point values are easily configured in the `config.json` file.
-- **Admin Tools**: Includes commands for administrators to manage user data and create backups.
+- **Event Management**: Start, stop, and manage events with simple commands.
+- **Automatic Point Calculation**: Points are awarded based on the time spent in an event.
+- **Unique Join Codes**: Each event has a unique, randomly generated 4-character code for joining.
+- **Leaderboard**: Display a server-wide leaderboard of top point earners.
+- **Personal Stats**: Users can check their own total points and breakdown by event.
+- **Admin Controls**: Secure commands for resetting data and viewing participation records.
+- **Data Persistence**: All points and event data are saved locally in a `data` directory.
 
-## Commands
+## 🚀 Getting Started
 
-All commands are accessed via the `/event` slash command group.
+### Prerequisites
 
-### User Commands
-- `/event start <event_id>`: Starts a new event. The `event_id` corresponds to a pre-configured event type.
-- `/event stop`: Stops the event you are currently hosting.
-- `/event join <code>`: Joins an active event using its 4-character code.
-- `/event kick <member>`: (Host only) Removes a participant from your event.
-- `/event list`: (Host only) Shows all participants currently in your event.
-- `/event me`: Displays your personal activity point summary.
-- `/event id`: Lists all available event IDs and their descriptions.
-- `/event summary`: Shows the server-wide activity point leaderboard.
+- Python 3.8+
+- A Discord Bot Token
 
-### Admin Commands
-- `/admin backup`: Creates a timestamped backup of the data directory.
-- `/admin reset_user_data <user>`: Resets all points and event records for a specific user.
-- `/admin reset_all_data`: **(DANGEROUS)** Wipes all points and event records for everyone on the server. A confirmation is required.
-
-## Setup & Installation
+### Installation
 
 1.  **Clone the repository:**
     ```bash
@@ -50,27 +32,33 @@ All commands are accessed via the `/event` slash command group.
     pip install -r requirements.txt
     ```
 
-3.  **Configure the bot:**
-    - Rename `.env.example` to `.env`.
-    - Open the `.env` file and add your Discord bot token:
+3.  **Configuration:**
+    - Rename the `.env.example` file to `.env` (if applicable) or create a new `.env` file.
+    - Add your Discord bot token to the `.env` file:
       ```
-      DISCORD_TOKEN=your_bot_token_here
+      DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE
       ```
-    - (Optional) Modify `config.json` to define your own custom events and point values.
+    - Customize event types by editing the `config.json` file. See the [Software Specification](SOFTWARE_SPECIFICATION.md) for details on the configuration format.
 
 4.  **Run the bot:**
     ```bash
-    python3 bot.py
+    python bot.py
     ```
 
-## File Structure
+## 🤖 Bot Commands
 
-- `bot.py`: The main application file containing all the bot's logic.
-- `config.json`: Configuration file for defining event types and points.
-- `requirements.txt`: A list of the Python libraries required to run the bot.
-- `.env`: File for storing environment variables (like the `DISCORD_TOKEN`).
-- `data/`: Directory where the bot stores its persistent data.
-    - `active_events.json`: Stores currently running events.
-    - `points.json`: Stores user point data.
-    - `event_records.json`: Contains a detailed log of all participation.
-    - `bot.pid`: A process ID file to prevent multiple instances of the bot from running.
+All commands are accessed via the `/event` slash command group.
+
+-   `/event start <event_id>`: Starts an event you will host. The bot provides a unique join code.
+-   `/event join <code>`: Join an active event using its 4-character code.
+-   `/event stop`: Stops the event you are currently hosting and distributes points to all participants.
+-   `/event kick <member>`: (Host only) Removes a participant from your event and calculates their points.
+-   `/event list`: (Host only) Shows a list of all participants in your current event.
+-   `/event me`: Check your personal total points and a summary of points per event.
+-   `/event id`: View a list of all available event IDs and their types.
+-   `/event summary`: Displays the server-wide activity point leaderboard.
+-   `/event records`: (Admin only) Shows a detailed log of the most recent event participations.
+-   `/event reset`: (Admin only) Backs up and clears all server points and event data.
+
+---
+*This bot is designed to be simple, robust, and easy to manage for community engagement.*

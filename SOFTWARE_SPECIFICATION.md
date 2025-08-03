@@ -2,137 +2,105 @@
 
 ## 1. Introduction
 
-This document outlines the software specifications for the SFL Event-Based Activity Point Bot. The bot is a Discord application designed to automate the tracking of member participation in guild events and award activity points accordingly. It is built using Python with the `discord.py` library.
+This document outlines the software specifications for the SFL Event-Based Activity Point Bot. The bot is designed to run on Discord and allows server administrators to reward users with points for participating in designated events. The system is event-driven, with points calculated based on the duration of participation.
 
 ## 2. System Architecture
 
-The bot operates as a single, asynchronous process running `bot.py`. It interacts with the Discord API via the `discord.py` library and maintains its state through a set of local JSON files.
+The bot is a single-instance Python application that connects to the Discord API via the `discord.py` library.
 
-### 2.1. Core Components
-- **Discord Bot Client (`bot.py`)**: The main entry point and runtime process. It handles the connection to Discord, registers slash commands, and listens for events (e.g., command invocations).
-- **Command Handler (`discord.py` integration)**: Manages the registration and execution of application commands (slash commands) grouped under `/event` and `/admin`.
-- **Event Management Module**: A collection of functions responsible for the lifecycle of an event: starting, stopping, and managing participants.
-- **Point Calculation Engine**: A module responsible for calculating points based on participation duration and event type.
-- **Data Persistence Layer**: A set of utility functions for reading from and writing to the JSON data files. This ensures data integrity and persistence across bot restarts.
+-   **Language**: Python 3
+-   **Primary Library**: `discord.py`
+-   **Data Storage**: Local JSON files within a `data/` directory.
+-   **Configuration**: A root `config.json` file for event definitions and a `.env` file for sensitive credentials (Discord Token).
 
-### 2.2. Data Storage
-The bot's state is persisted in the `data/` directory using JSON files.
+### 2.1. Data Persistence
 
-- **`active_events.json`**: Stores a real-time list of all currently active events. This file is critical for joining events and for data recovery if the bot restarts.
-- **`points.json`**: Acts as the main database for user points. It stores the total points for each user and a breakdown by event type.
-- **`event_records.json`**: A detailed log file that records every single participation session for every user, including start time, end time, duration, and points earned.
-- **`bot.pid`**: A lock file containing the Process ID (PID) of the running bot instance. This prevents multiple instances from starting simultaneously, which would corrupt the data files.
+The bot maintains its state through several JSON files located in the `data/` directory:
 
-## 3. Data Structures
+-   `active_events.json`: Stores a dictionary of currently running events, including the host, participants, and start times.
+-   `points.json`: Stores a dictionary mapping user IDs to their total points and a breakdown of points per event type.
+-   `event_records.json`: A list of all historical participation records, logging user, event details, duration, and points earned.
+-   `bot.pid`: A process ID file to prevent multiple instances of the bot from running simultaneously.
 
-### 3.1. `active_events.json`
-A JSON object where keys are the unique 4-character join codes.
+Data is loaded into memory on startup and saved back to the disk whenever a state change occurs (e.g., a user joins an event, an event is stopped).
 
-```json
-{
-  "JOIN_CODE": {
-    "event_id": "string",
-    "event_name": "string",
-    "creator_id": "integer (Discord User ID)",
-    "start_time": "float (Unix Timestamp)",
-    "participants": {
-      "USER_ID": {
-        "join_time": "float (Unix Timestamp)"
-      }
-    }
-  }
-}
-```
+## 3. Core Functionality
 
-### 3.2. `points.json`
-A JSON object where keys are Discord User IDs.
+### 3.1. Event Lifecycle
 
-```json
-{
-  "USER_ID": {
-    "total_points": "integer",
-    "event_points": {
-      "EVENT_TYPE_1": "integer",
-      "EVENT_TYPE_2": "integer"
-    }
-  }
-}
-```
+1.  **Creation**: An authorized user (a "host") starts an event using the `/event start` command with a valid `event_id` from `config.json`.
+2.  **Activation**: The bot generates a unique 4-character alphanumeric join code and records the event as active in `active_events.json`. The host and the join code are associated with the event.
+3.  **Participation**: Other users can join the event using the `/event join` command with the correct code. Their participation start time is recorded.
+4.  **Termination**: The host stops the event using `/event stop`.
+5.  **Point Calculation**: Upon termination, the bot calculates the participation duration for every user in the event. Points are awarded based on the `points_per_minute` defined in the event's configuration.
+6.  **Data Update**: User points are updated in `points.json`, and a detailed record of each participation is appended to `event_records.json`. The event is removed from `active_events.json`.
 
-### 3.3. `event_records.json`
-A JSON object where keys are Discord User IDs. Each user has a list of their participation records.
+### 3.2. Point Calculation
 
-```json
-{
-  "USER_ID": [
-    {
-      "event_name": "string",
-      "join_time": "float (Unix Timestamp)",
-      "leave_time": "float (Unix Timestamp)",
-      "duration_minutes": "integer",
-      "points_earned": "integer"
-    }
-  ]
-}
-```
+Points are calculated with the following formula:
+`points = (duration_in_minutes * points_per_minute)`
+The result is rounded to two decimal places.
 
-### 3.4. `config.json`
-A configuration file defining the available event types.
+## 4. Command Specification
 
+All commands are implemented as Discord Slash Commands under the main `/event` group.
+
+| Command           | Description                                                              | Arguments          | Permissions      |
+| ----------------- | ------------------------------------------------------------------------ | ------------------ | ---------------- |
+| `/event start`    | Starts a new event and generates a join code.                            | `event_id` (string)| Anyone           |
+| `/event join`     | Joins an active event using its code.                                    | `code` (string)    | Anyone           |
+| `/event stop`     | Stops the event hosted by the user and calculates points.                | None               | Event Host       |
+| `/event kick`     | Removes a participant from the host's event.                             | `member` (User)    | Event Host       |
+| `/event list`     | Lists all participants in the host's current event.                      | None               | Event Host       |
+| `/event me`       | Shows the user's own total points and event history.                     | None               | Anyone           |
+| `/event id`       | Lists all available event IDs and their types from `config.json`.        | None               | Anyone           |
+| `/event summary`  | Displays a server-wide point leaderboard.                                | None               | Anyone           |
+| `/event records`  | Displays a log of the most recent event participation records.           | None               | Administrator    |
+| `/event reset`    | Backs up and clears all event data, points, and active events.           | None               | Administrator    |
+
+## 5. Configuration Files
+
+### 5.1. `config.json`
+
+This file defines the types of events that can be run. It contains a list of event objects.
+
+**Structure**:
 ```json
 {
   "events": [
     {
-      "id": "string (Unique identifier)",
-      "name": "string (Display name)",
-      "points_per_minute": "integer"
+      "event_id": "sfl_study",
+      "event_type": "SFL Study Session",
+      "points_per_minute": 0.5
+    },
+    {
+      "event_id": "community_gaming",
+      "event_type": "Community Gaming Night",
+      "points_per_minute": 0.25
     }
   ]
 }
 ```
 
-## 4. Functional Requirements
+-   `event_id`: A unique string identifier used in the `/event start` command.
+-   `event_type`: A user-friendly name for the event.
+-   `points_per_minute`: The number of points awarded for each minute of participation.
 
-### 4.1. Event Creation
-- **FR1.1**: A user with appropriate permissions can start an event using the `/event start` command.
-- **FR1.2**: The system must accept a valid `event_id` from `config.json`.
-- **FR1.3**: Upon starting, the system shall generate a unique, 4-character, alphanumeric join code.
-- **FR1.4**: The system must prevent a user from starting a new event if they are already hosting one.
-- **FR1.5**: The new event must be immediately saved to `active_events.json`.
+### 5.2. `.env`
 
-### 4.2. Event Participation
-- **FR2.1**: Any user can join an active event using `/event join` with a valid join code.
-- **FR2.2**: The system shall record the user's ID and their `join_time`.
-- **FR2.3**: A user cannot join an event they are already in.
+This file stores environment variables.
 
-### 4.3. Event Finalization
-- **FR3.1**: The event creator can stop their event using `/event stop`.
-- **FR3.2**: Upon stopping, the system shall trigger the point calculation process for all participants.
-- **FR3.3**: The event must be removed from `active_events.json`.
-- **FR3.4**: A summary of the event (duration, participants, total points) shall be displayed to the creator.
+**Structure**:
+```
+DISCORD_TOKEN=YOUR_DISCORD_BOT_TOKEN
+```
 
-### 4.4. Point Calculation Algorithm
-- **FR4.1**: For each participant, the duration is calculated as (`current_time` - `join_time`).
-- **FR4.2**: Points are calculated as `duration_in_minutes` * `points_per_minute` (from `config.json`).
-- **FR4.3**: The calculated points are added to the user's total in `points.json`.
-- **FR4.4**: A detailed entry for the participation session is added to `event_records.json`.
+-   `DISCORD_TOKEN`: The bot's secret token provided by the Discord Developer Portal.
 
-### 4.5. User-Facing Commands
-- **FR5.1**: `/event me`: A user can view their own total points and a breakdown by event type.
-- **FR5.2**: `/event summary`: Any user can view a server-wide leaderboard of the top 10 users by total points.
-- **FR5.3**: `/event id`: Any user can view a list of all available event types and their IDs.
-- **FR5.4**: `/event list`: The event host can view a list of current participants.
-- **FR5.5**: `/event kick`: The event host can remove a participant from their event, which finalizes points for that user immediately.
+## 6. Error Handling and Edge Cases
 
-### 4.6. Administrative Functions
-- **FR6.1**: `/admin backup`: An administrator can create a compressed `.tar.gz` backup of the `data/` directory.
-- **FR6.2**: `/admin reset_user_data`: An administrator can wipe all data for a specific user from `points.json` and `event_records.json`.
-- **FR6.3**: `/admin reset_all_data`: An administrator can wipe all data for all users. This action requires a secondary confirmation step.
-
-## 5. Non-Functional Requirements
-
-- **NFR1 (Usability)**: All functionality shall be exposed through Discord slash commands for ease of use.
-- **NFR2 (Reliability)**: The bot must persist all data to the file system to ensure no data loss upon restart.
-- **NFR3 (Concurrency)**: The bot must use a PID lock file (`bot.pid`) to prevent more than one instance from running, which would lead to data corruption.
-- **NFR4 (Security)**: The Discord bot token must be loaded from an environment variable (`.env` file) and not be hardcoded in the source.
-- **NFR5 (Configuration)**: Event types and their point values must be configurable through the `config.json` file without requiring code changes.
+-   **Stale PID File**: The bot checks for and removes stale `bot.pid` files on startup to recover from improper shutdowns.
+-   **Concurrent Instances**: The bot will exit if it detects another instance is already running.
+-   **Invalid JSON**: If a data file is corrupted or empty, the bot will initialize it with default empty data to prevent crashes.
+-   **Missing Permissions**: Administrative commands (`/event reset`, `/event records`) will fail with an informative error if used by a non-administrator.
+-   **User Not Found**: When generating leaderboards or lists, if a user has left the server, the bot will display their ID as a fallback.
