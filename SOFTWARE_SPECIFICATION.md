@@ -57,7 +57,7 @@ All commands are implemented as Discord Slash Commands under the main `/event` g
 | `/event me`       | Shows the user's own total points and event history.                     | None               | Anyone           |
 | `/event id`       | Lists all available event IDs and their types from `config.json`.        | None               | Anyone           |
 | `/event summary`  | Displays a server-wide point leaderboard.                                | None               | Anyone           |
-| `/event records`  | Displays a log of the most recent event participation records.           | None               | Administrator    |
+| `/event records`  | Displays a log of the most recent event participation records.           | None               | Anyone           |
 | `/event reset`    | Backs up and clears all event data, points, and active events.           | None               | Administrator    |
 
 ## 5. Configuration Files
