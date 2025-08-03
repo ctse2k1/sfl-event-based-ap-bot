@@ -323,11 +323,14 @@ async def me(interaction: Interaction):
     )
     embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
+    # Filter out user specific event records
+    filtered_records = [d for d in event_records_data if d['user_id'] == str(interaction.user.id)]
+
     # Sort records by start time, newest first
-    user_event_records = sorted(event_records_data, key=lambda x: x['start_time'], reverse=True)
+    sorted_records = sorted(filtered_records, key=lambda x: x['start_time'], reverse=True)
 
     record_fields = []
-    for record in user_event_records:
+    for record in sorted_records:
         event_date = datetime.fromisoformat(record['start_time']).strftime('%Y-%m-%d %H:%M')
         duration_mins = record.get('duration_minutes', 0.0)
         points = record.get('points_earned', 0.0)
@@ -344,8 +347,8 @@ async def me(interaction: Interaction):
     for name, value in record_fields:
         embed.add_field(name=name, value=value, inline=False)
 
-    if len(user_event_records) > 20:
-        embed.set_footer(text=f"Showing the last 20 of {len(user_event_records)} records.")
+    if len(sorted_records) > 20:
+        embed.set_footer(text=f"Showing the last 20 of {len(sorted_records)} records.")
 
     await interaction.followup.send(embed=embed, ephemeral=True)
 
