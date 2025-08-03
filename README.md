@@ -1,83 +1,106 @@
-# SFL Event-based Activity Points Bot
+# SFL Event-Based Activity Point Bot
 
-The **SFL Event-based Activity Points Bot** is a Discord bot designed to track and reward member participation in server events. It allows event organizers to manage events, track attendance, and automatically calculate and assign activity points based on configurable parameters.
+A Discord bot designed to track user participation in server events and automatically award activity points based on time spent. The bot uses slash commands for easy interaction and persists all data locally.
 
-## Key Features
+## Features
 
-- **Event Management**: Start and stop events with simple slash commands.
-- **Automated Point Calculation**: Points are calculated based on participation duration and event-specific rates.
-- **Unique Join Codes**: Each event has a unique, temporary code for participants to join.
-- **Flexible Configuration**: Event types and point rates are defined in a `config.json` file.
-- **Persistent Data**: All event data and member points are saved locally.
-- **Leaderboards**: Display server-wide rankings based on total points.
-- **Per-Server Profiles**: Uses server-specific display names and avatars.
+- **Event Management**: Start, stop, and manage events with unique join codes.
+- **Time-Based Points**: Automatically calculates and awards points to participants based on their duration in an event.
+- **Persistent Data**: All user points, event records, and active events are saved locally in JSON files, ensuring data is not lost on restart.
+- **Leaderboard**: A server-wide leaderboard to foster competition.
+- **Individual Stats**: Users can check their own point totals and breakdown by event.
+- **Admin Controls**: Secure commands for administrators to reset data, with automatic backups.
+- **Instance Locking**: Prevents multiple instances of the bot from running simultaneously.
 
-## Slash Commands
+## Setup & Installation
 
-The bot uses a main command group named `/event`.
+1.  **Prerequisites**:
+    *   Python 3.8+
+    *   A Discord Bot Token with `bot` and `applications.commands` scopes. The bot also requires the "Server Members Intent" to be enabled on the Discord Developer Portal.
 
-### Event Management
-- `/event start <event_id>`: Starts a new event and generates a 4-character join code. Only one event can be hosted by a user at a time.
-- `/event stop`: Stops the currently hosted event, calculates points for all participants, and saves the data.
-- `/event kick <member>`: Removes a participant from the event and calculates their points.
-- `/event list`: Shows a list of all participants currently in the event you are hosting.
-
-### Participant Commands
-- `/event join <code>`: Allows a member to join an active event using its 4-character code.
-- `/event me`: Displays your own total activity points and a breakdown of points per event.
-
-### Informational Commands
-- `/event id`: Lists all available event IDs and their corresponding types from the configuration file.
-- `/event summary`: Shows a server-wide leaderboard of members ranked by total activity points.
-- `/event records <member>`: Displays a detailed breakdown of points for a specific member.
-
-### Administrative Commands
-- `/event reset`: (Administrator Only) Clears all active event data and resets all member points to zero.
-
-## Setup & Configuration
-
-1.  **Clone the repository:**
+2.  **Clone the repository**:
     ```bash
     git clone https://github.com/ctse2k1/sfl-event-based-ap-bot.git
     cd sfl-event-based-ap-bot
     ```
 
-2.  **Install dependencies:**
+3.  **Install dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
 
-3.  **Create a `.env` file** in the root directory and add your Discord bot token:
-    ```
-    DISCORD_TOKEN=YOUR_BOT_TOKEN_HERE
-    ```
+4.  **Create a configuration file for your bot token**:
+    *   Create a file named `.env` in the project directory.
+    *   Add your bot token to this file:
+        ```
+        DISCORD_TOKEN=YOUR_DISCORD_BOT_TOKEN_HERE
+        ```
 
-4.  **Configure events** in `config.json`. Define your events with an ID, type, and points-per-minute rate.
-    ```json
-    {
-      "events": [
+5.  **Define your events**:
+    *   Edit the `config.json` file to define the events you want to run. The `event_id` is what you will use with the `/event start` command.
+    *   **Example `config.json`**:
+        ```json
         {
-          "event_id": 101,
-          "event_type": "Community Hangout",
-          "points_per_minute": 1.5
-        },
-        {
-          "event_id": 201,
-          "event_type": "Gaming Night",
-          "points_per_minute": 2.0
+          "events": [
+            {
+              "event_id": "1",
+              "event_type": "Community Hangout",
+              "points_per_minute": 0.5
+            },
+            {
+              "event_id": "2",
+              "event_type": "Gaming Session",
+              "points_per_minute": 1.0
+            }
+          ]
         }
-      ]
-    }
-    ```
+        ```
 
-5.  **Run the bot:**
+6.  **Run the bot**:
     ```bash
-    python3 bot.py
+    python bot.py
     ```
 
-## Data Persistence
+## Commands
 
-- **Active Events**: Stored in `data/active_events.json`.
-- **Member Points**: Stored in `data/points.json`.
+All commands are accessed via the `/event` slash command group.
 
-The `data` directory is created automatically if it doesn't exist.
+### Host Commands
+
+| Command                 | Description                                       | Parameters                               |
+| ----------------------- | ------------------------------------------------- | ---------------------------------------- |
+| `/event start`          | Starts an event and generates a 4-digit join code. | `event_id`: The ID from `config.json`.   |
+| `/event stop`           | Stops the event you are currently hosting.        | _None_                                   |
+| `/event kick`           | Removes a participant from your event.            | `member`: The user to kick.              |
+| `/event list`           | Lists all participants in your current event.     | _None_                                   |
+
+### Participant Commands
+
+| Command      | Description                          | Parameters                           |
+| ------------ | ------------------------------------ | ------------------------------------ |
+| `/event join`| Joins an active event.               | `code`: The 4-digit event join code. |
+| `/event me`  | Shows your total points and history. | _None_                               |
+
+### General Commands
+
+| Command         | Description                               | Parameters |
+| --------------- | ----------------------------------------- | ---------- |
+| `/event id`     | Lists all available event IDs and types.  | _None_     |
+| `/event summary`| Displays the server point leaderboard.    | _None_     |
+| `/event records`| Shows the last 20 event participation logs.| _None_     |
+
+### Admin Commands
+
+| Command       | Description                                  | Permissions   |
+| ------------- | -------------------------------------------- | ------------- |
+| `/event reset`| **Deletes all data.** Backs up records first. | Administrator |
+
+## Data Files
+
+The bot creates and uses a `data/` directory to store its state:
+
+-   `active_events.json`: Stores information about events that are currently in progress.
+-   `points.json`: Contains the total points for each user, broken down by event.
+-   `event_records.json`: A detailed log of every single participation record.
+-   `bot.pid`: A process ID file to prevent multiple bot instances from running.
+-   `event_records_backup_...json`: Created when the `/event reset` command is used.
