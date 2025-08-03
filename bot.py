@@ -398,7 +398,7 @@ async def records(interaction: Interaction):
     record_fields = []
     for record in records_to_display:
         try:
-            user = await bot.fetch_user(int(record['user_id']))
+            user = await interaction.guild.fetch_member(int(record['user_id']))
             user_display_name = user.display_name
         except (NotFound, HTTPException):
             user_display_name = f"Unknown User (ID: {record['user_id']})"
