@@ -9,61 +9,40 @@ import random
 import string
 from datetime import datetime, timezone
 import atexit
+import psutil
+import time
 import sys
 import signal
 import shutil
-# --- Constants ---
-DATA_DIR = 'data'
-PID_FILE = os.path.join(DATA_DIR, 'bot.pid')
+# --- Instance Management ---
+def terminate_other_instances():
+    """Find and terminate other running instances of this script."""
+    current_pid = os.getpid()
+    my_name = os.path.basename(__file__)
+    logging.info(f"Instance manager started for {my_name} (PID: {current_pid}).")
 
-# --- Ensure Data Directory Exists ---
-os.makedirs(DATA_DIR, exist_ok=True)
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            # Check if process name contains python and script name is in command line
+            if 'python' in proc.info['name'].lower() and proc.info['cmdline'] and my_name in proc.info['cmdline'][-1]:
+                if proc.pid != current_pid:
+                    logging.warning(f"Found another running instance: PID {proc.pid}. Terminating it.")
+                    p = psutil.Process(proc.pid)
+                    p.terminate() # Send SIGTERM
+                    try:
+                        p.wait(timeout=3) # Wait for graceful shutdown
+                        logging.info(f"Instance {proc.pid} terminated gracefully.")
+                    except psutil.TimeoutExpired:
+                        logging.warning(f"Instance {proc.pid} did not terminate gracefully. Forcing kill.")
+                        p.kill() # Send SIGKILL
+                        logging.info(f"Instance {proc.pid} killed.")
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        except Exception as e:
+            logging.error(f"Error while checking process {proc.pid}: {e}")
 
-# --- PID Lock File Check ---
-def cleanup():
-    """Remove the PID file on exit."""
-    if os.path.exists(PID_FILE):
-        logging.info(f"Shutting down. Removing PID file: {PID_FILE}")
-        os.remove(PID_FILE)
-
-atexit.register(cleanup)
-
-def signal_handler(sig, frame):
-    print(f"Signal {sig} received, cleaning up...")
-    cleanup()
-    sys.exit(0)
-
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-
-if os.path.isfile(PID_FILE):
-    try:
-        with open(PID_FILE, 'r') as f:
-            pid = int(f.read().strip())
-        # Check if the process exists on UNIX-like systems by sending a null signal.
-        os.kill(pid, 0)
-    except (IOError, ValueError, OSError):
-        # Stale PID file (e.g., process not running), so we remove it.
-        logging.warning(f"Found and removed stale PID file: {PID_FILE}")
-        os.remove(PID_FILE)
-    else:
-        # Process is still running
-        logging.error(f"FATAL: Another instance is already running with PID {pid}. Exiting.")
-        sys.exit(1)
-
-# Create the new PID file for the current instance
-try:
-    with open(PID_FILE, 'w') as f:
-        f.write(str(os.getpid()))
-except IOError as e:
-    logging.error(f"FATAL: Could not write PID file {PID_FILE}. Exiting. Error: {e}")
-    sys.exit(1)
-try:
-    with open(PID_FILE, 'w') as f:
-        f.write(str(os.getpid()))
-except IOError as e:
-    logging.error(f"FATAL: Could not write PID file {PID_FILE}. Exiting. Error: {e}")
-    sys.exit(1)
+# Run the terminator function at startup
+terminate_other_instances()
 
 # --- Basic Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)-8s] %(message)s')
