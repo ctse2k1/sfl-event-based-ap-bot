@@ -10,6 +10,7 @@ import string
 from datetime import datetime, timezone
 import atexit
 import sys
+import signal
 import shutil
 # --- Constants ---
 DATA_DIR = 'data'
@@ -26,6 +27,14 @@ def cleanup():
         os.remove(PID_FILE)
 
 atexit.register(cleanup)
+
+def signal_handler(sig, frame):
+    print(f"Signal {sig} received, cleaning up...")
+    cleanup()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 if os.path.isfile(PID_FILE):
     try:
