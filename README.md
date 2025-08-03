@@ -20,13 +20,14 @@ The SFL Event-Based Activity Point Bot is a specialized Discord bot designed to 
 - `/event me`: Shows your total activity points and a detailed history of your event participation.
 - `/event summary`: Displays the server-wide leaderboard, ranking users by their total points.
 - `/event id`: Lists all available event types and their corresponding IDs.
+- `/event records`: Shows a detailed log of the most recent event participations.
 
 ### For Event Hosts:
 - `/event start <event_id>`: Starts a new event.
 - `/event stop`: Stops the event you are hosting and calculates points.
 - `/event kick <member>`: Removes a participant from your event.
 - `/event list`: Lists all participants in your current event.
-- `/event reset`: Resets the points and participation history for all users.
+- `/event reset`: (Admin only) Backs up and clears all server points and event data.
 
 ## 4. Installation & Setup
 
