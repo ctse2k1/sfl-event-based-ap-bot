@@ -6,27 +6,26 @@ The SFL Event-Based Activity Point Bot is a specialized Discord bot designed to 
 
 ## 2. Features
 
-- **Event Management:** Start and stop events tied to specific voice channels.
+- **Event Management:** Start and stop events.
 - **Automated Point Calculation:** Automatically calculates and awards points to participants based on their duration in a voice channel during an event.
 - **Leaderboard:** Display a server-wide leaderboard of user points.
 - **Personal Statistics:** Users can check their own participation history and total points.
-- **Role-Based Access Control:** Restricts event management commands to users with a specific role ('Event Manager').
 - **Dynamic Event Configuration:** Event types and point values are configured via a simple JSON file, allowing for easy updates without code changes.
 - **Data Persistence:** Event participation data is saved locally in a JSON file, ensuring no data is lost between bot restarts.
-- **Data Export:** Event managers can export the raw event data for external analysis.
 
 ## 3. Commands
 
 ### For Everyone:
+- `/event join <code>`: Joins an event using a 4-character code.
 - `/event me`: Shows your total activity points and a detailed history of your event participation.
 - `/event summary`: Displays the server-wide leaderboard, ranking users by their total points.
 - `/event id`: Lists all available event types and their corresponding IDs.
-- `/event participants <event_id>`: Shows the list of current participants in an active event.
 
-### For Event Managers (Requires 'Event Manager' role):
-- `/event start <event_id>`: Starts a new event. The bot will monitor the voice channel you are currently in.
-- `/event stop <event_id>`: Stops an active event and calculates points for all participants.
-- `/event export`: Sends the `event_records.json` file containing all participation data.
+### For Event Hosts:
+- `/event start <event_id>`: Starts a new event.
+- `/event stop`: Stops the event you are hosting and calculates points.
+- `/event kick <member>`: Removes a participant from your event.
+- `/event list`: Lists all participants in your current event.
 
 ### For Bot Owner:
 - `/bot terminate`: Shuts down the bot.
@@ -64,7 +63,7 @@ The SFL Event-Based Activity Point Bot is a specialized Discord bot designed to 
 ### Event Configuration (`config.json`)
 This file defines the types of events the bot can manage.
 
-- **`event_id`**: A unique integer identifier for the event. This is what you use with the `/event start` and `/event stop` commands.
+- **`event_id`**: A unique integer identifier for the event. This is what you use with the `/event start` command.
 - **`event_type`**: A descriptive name for the event (e.g., "Community Hangout", "Gaming Night").
 - **`points_per_minute`**: The number of points a user earns for each minute of participation.
 
@@ -81,13 +80,3 @@ This file defines the types of events the bot can manage.
   }
 }
 ```
-
-## 6. Usage
-
-1.  Ensure the bot is running and has been invited to your Discord server.
-2.  Create a role named `Event Manager` and assign it to users who should be able to manage events.
-3.  An Event Manager joins a voice channel.
-4.  The manager uses `/event start <event_id>` to begin the event.
-5.  Users who are in the same voice channel will now be tracked.
-6.  When the event is over, the manager uses `/event stop <event_id>`.
-7.  The bot calculates the points for all participants and saves the records. A summary is posted in the channel where the command was used.

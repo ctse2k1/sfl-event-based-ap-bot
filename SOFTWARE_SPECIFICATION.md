@@ -14,7 +14,7 @@ The bot will operate within a Discord server environment. Its primary functions 
 - **Guild:** A Discord server.
 - **Voice Channel (VC):** A channel on a Discord server where users can communicate via voice and video.
 - **Event:** A time-bound activity occurring in a specific voice channel, managed by the bot.
-- **Event Manager:** A user with a specific role that grants them permission to manage bot events.
+- **Event Host:** A user who starts an event.
 - **Activity Points (AP):** Points awarded to users for their participation in events.
 - **JSON:** JavaScript Object Notation, a lightweight data-interchange format.
 
@@ -38,95 +38,26 @@ The system is a single Python application that connects to the Discord Gateway A
 ## 3. Functional Requirements
 
 ### 3.1. Event Management
-- **FR1.1: Start Event:** An authorized user (Event Manager) must be able to start an event by specifying an `event_id`. The event is tied to the voice channel the manager is currently in.
-- **FR1.2: Stop Event:** An authorized user must be able to stop an active event using its `event_id`. Upon stopping, the bot will finalize points for all participants.
-- **FR1.3: Unique Events:** The bot must prevent starting an event that is already active.
-- **FR1.4: Authorization:** Access to start and stop commands shall be restricted to users with the "Event Manager" role.
+- **FR1.1: Start Event:** An event host must be able to start an event by specifying an `event_id`.
+- **FR1.2: Stop Event:** An event host must be able to stop an active event. Upon stopping, the bot will finalize points for all participants.
+- **FR1.3: Join Event:** Any user can join an active event using a 4-character code.
+- **FR1.4: Kick from Event:** The event host can remove a participant from the event.
+- **FR1.5: List Participants:** The event host can list all participants in their event.
 
 ### 3.2. Point Calculation and Tracking
-- **FR2.1: Participant Tracking:** The bot must track all users present in the designated voice channel from the moment an event starts.
-- **FR2.2: Time Calculation:** The bot shall calculate the total duration (in minutes) that each user spent in the voice channel during the event.
+- **FR2.1: Participant Tracking:** The bot must track all users who have joined an event.
+- **FR2.2: Time Calculation:** The bot shall calculate the total duration (in minutes) that each user participated in the event.
 - **FR2.3: Point Awarding:** Points will be calculated by multiplying the user's participation duration by the `points_per_minute` value defined in `config.json` for that event type.
 - **FR2.4: Data Recording:** For each participant in a completed event, a record shall be created containing `user_id`, `event_id`, `event_type`, `start_time`, `end_time`, `duration_minutes`, and `points_earned`.
 
 ### 3.3. Data Persistence
 - **FR3.1: Active Events:** The state of all active events must be saved to `active_events.json` to allow recovery from bot restarts.
-- **FR3.2: Participation Records:** All finalized participation records must be appended to `event_records.json`. This file serves as the master database for all user activity.
+- **FR3.2: Participation Records:** All finalized participation records must be saved to `event_records.json`.
 
 ### 3.4. User-Facing Commands
-- **FR4.1: Personal Stats (`/event me`):** Any user must be able to view their own total accumulated points and a history of their event participation.
-- **FR4.2: Leaderboard (`/event summary`):** Any user must be able to view a server-wide leaderboard that ranks users by total points.
-- **FR4.3: Event List (`/event id`):** Any user must be able to list all configured event types and their corresponding IDs.
-- **FR4.4: Active Participants (`/event participants`):** Any user must be able to see the list of participants currently in an active event.
+- **FR4.1: Me Command:** A user must be able to view their own total points and event history.
+- **FR4.2: Summary Command:** Any user must be able to view a server-wide leaderboard of points.
+- **FR4.3: ID Command:** Any user must be able to list all available event types and their IDs.
 
-### 3.5. Administrative Commands
-- **FR5.1: Data Export (`/event export`):** An Event Manager must be able to export the `event_records.json` file.
-- **FR5.2: Bot Termination (`/bot terminate`):** The bot owner (as defined by Discord API) must be able to shut down the bot gracefully.
-
-## 4. Non-Functional Requirements
-
-### 4.1. Usability
-- **NFR1.1:** Commands should be implemented as Discord slash commands for ease of use.
-- **NFR1.2:** Responses to commands should be clear, concise, and formatted using Discord embeds for better readability.
-- **NFR1.3:** Error messages should be user-friendly and provide guidance on how to correct the issue.
-
-### 4.2. Reliability
-- **NFR2.1:** The bot should handle unexpected disconnects from Discord and attempt to reconnect automatically.
-- **NFR2.2:** The bot should gracefully handle cases where a user leaves the server or cannot be fetched, logging an appropriate message instead of crashing.
-- **NFR2.3:** Data integrity must be maintained. JSON files should be written atomically where possible to prevent corruption.
-
-### 4.3. Performance
-- **NFR3.1:** Command responses should be delivered within 3 seconds under normal load. For potentially long-running tasks (like generating a large summary), the bot should use deferred responses.
-
-### 4.4. Configurability
-- **NFR4.1:** Event types and point values must be configurable through the `config.json` file without requiring code changes.
-
-### 4.5. Security
-- **NFR5.1:** The bot's Discord token must be stored securely and not be hardcoded in the source code.
-- **NFR5.2:** Command access must be strictly enforced based on user roles.
-
-## 5. Data Model
-
-### 5.1. `config.json`
-A dictionary where keys are `event_id` (stringified integer).
-```json
-{
-  "event_id": {
-    "event_type": "string",
-    "points_per_minute": "float"
-  }
-}
-```
-
-### 5.2. `active_events.json`
-A dictionary where keys are `event_id`.
-```json
-{
-  "event_id": {
-    "start_time": "ISO 8601 string",
-    "vc_id": "integer",
-    "manager_id": "integer",
-    "participants": {
-      "user_id": {
-        "start_time": "ISO 8601 string"
-      }
-    }
-  }
-}
-```
-
-### 5.3. `event_records.json`
-A list of participation record objects.
-```json
-[
-  {
-    "user_id": "string",
-    "event_id": "string",
-    "event_type": "string",
-    "start_time": "ISO 8601 string",
-    "end_time": "ISO 8601 string",
-    "duration_minutes": "float",
-    "points_earned": "float"
-  }
-]
-```
+### 3.5. Bot Administration
+- **FR5.1: Terminate:** The bot owner must be able to shut down the bot gracefully.
