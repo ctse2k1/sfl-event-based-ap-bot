@@ -43,6 +43,7 @@ The system is a single Python application that connects to the Discord Gateway A
 - **FR1.3: Join Event:** Any user can join an active event using a 4-character code.
 - **FR1.4: Kick from Event:** The event host can remove a participant from the event.
 - **FR1.5: List Participants:** The event host can list all participants in their event.
+- **FR1.6: Reset Member Data:** An event host must be able to reset the points and participation history for a specific member.
 
 ### 3.2. Point Calculation and Tracking
 - **FR2.1: Participant Tracking:** The bot must track all users who have joined an event.
@@ -55,9 +56,6 @@ The system is a single Python application that connects to the Discord Gateway A
 - **FR3.2: Participation Records:** All finalized participation records must be saved to `event_records.json`.
 
 ### 3.4. User-Facing Commands
-- **FR4.1: Me Command:** A user must be able to view their own total points and event history.
+- **FR4.1: Me Command:** A user must be able to view their own participation history and total points.
 - **FR4.2: Summary Command:** Any user must be able to view a server-wide leaderboard of points.
 - **FR4.3: ID Command:** Any user must be able to list all available event types and their IDs.
-
-### 3.5. Bot Administration
-- **FR5.1: Terminate:** The bot owner must be able to shut down the bot gracefully.
