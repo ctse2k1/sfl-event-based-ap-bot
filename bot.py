@@ -58,7 +58,6 @@ if not DISCORD_TOKEN:
 CONFIG_FILE = 'config.json'
 DATA_DIR = 'data'
 ACTIVE_EVENTS_FILE = os.path.join(DATA_DIR, 'active_events.json')
-POINTS_FILE = os.path.join(DATA_DIR, 'points.json')
 EVENT_RECORDS_FILE = os.path.join(DATA_DIR, 'event_records.json')
 
 # --- Ensure Data Directory Exists ---
@@ -99,9 +98,11 @@ except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
 
 active_events = load_data(ACTIVE_EVENTS_FILE, {})
 event_records_data = load_data(EVENT_RECORDS_FILE, [])
-points_data = load_data(POINTS_FILE, {})
+
 def get_event_by_creator(creator_id):
     """Finds an event hosted by a specific creator."""
+    global active_events
+
     creator_id_str = str(creator_id)
     for event_code, event in active_events.items():
         if event.get('creator_id') == creator_id_str:
@@ -110,10 +111,10 @@ def get_event_by_creator(creator_id):
     return None, None
 
 def calculate_and_finalize_points(member_id, event_code):
-    global points_data
+    """Calculates points for a user, updates their record, and returns details."""
     global active_events
     global event_records_data
-    """Calculates points for a user, updates their record, and returns details."""
+
     event = active_events.get(event_code)
     if not event:
         return None
@@ -133,11 +134,6 @@ def calculate_and_finalize_points(member_id, event_code):
     duration_minutes = duration_seconds / 60
     points = max(0, round(duration_minutes * event_config.get('points_per_minute', 0), 2))
 
-    # Update points data
-    user_points = points_data.setdefault(member_id_str, {'total_points': 0, 'events': {}})
-    event_id_str = str(event['event_id'])
-    user_points['events'][event_id_str] = user_points['events'].get(event_id_str, 0) + points
-    user_points['total_points'] = round(sum(user_points['events'].values()), 2)
     # Save raw event record
     event_record = {
         'user_id': member_id_str,
@@ -150,8 +146,6 @@ def calculate_and_finalize_points(member_id, event_code):
     }
     event_records_data.append(event_record)
 
-    
-    
     return {"points": points, "duration": duration_minutes}
 
 # --- Bot Setup ---
@@ -176,6 +170,8 @@ async def on_ready():
 @event_group.command(name="start", description="Starts a new event and generates a join code.")
 @app_commands.describe(event_id="The unique ID of the event to start.")
 async def start(interaction: Interaction, event_id: str):
+    global active_events
+
     creator_id = str(interaction.user.id)
     if get_event_by_creator(creator_id)[0]:
         await interaction.response.send_message("❌ You are already hosting an event. Please stop it first.", ephemeral=True)
@@ -211,6 +207,8 @@ async def start(interaction: Interaction, event_id: str):
 @event_group.command(name="join", description="Joins an active event using a code.")
 @app_commands.describe(code="The 4-character code for the event.")
 async def join(interaction: Interaction, code: str):
+    global active_events
+
     event_code = code.lower()
     if event_code not in active_events:
         await interaction.response.send_message("❌ Invalid event code.", ephemeral=True)
@@ -230,6 +228,9 @@ async def join(interaction: Interaction, code: str):
 
 @event_group.command(name="stop", description="Stops the event you are hosting and calculates points.")
 async def stop(interaction: Interaction):
+    global active_events
+    global event_records_data
+
     creator_id = str(interaction.user.id)
     event_code, event = get_event_by_creator(creator_id)
 
@@ -244,7 +245,6 @@ async def stop(interaction: Interaction):
         calculate_and_finalize_points(pid, event_code)
 
     del active_events[event_code]
-    save_data(POINTS_FILE, points_data)
     save_data(EVENT_RECORDS_FILE, event_records_data)
     save_data(ACTIVE_EVENTS_FILE, active_events)
     
@@ -254,6 +254,8 @@ async def stop(interaction: Interaction):
 @event_group.command(name="kick", description="Removes a participant from your event.")
 @app_commands.describe(member="The member to remove from the event.")
 async def kick(interaction: Interaction, member: Member):
+    global active_events
+
     creator_id = str(interaction.user.id)
     event_code, event = get_event_by_creator(creator_id)
 
@@ -305,32 +307,47 @@ async def list_participants(interaction: Interaction):
 
 @event_group.command(name="me", description="Shows your total activity points and event history.")
 async def me(interaction: Interaction):
-    user_id = str(interaction.user.id)
-    user_data = points_data.get(user_id)
+    """Displays all event records of an user."""
+    global event_records_data
 
-    if not user_data or not user_data.get('events'):
-        await interaction.response.send_message("You don't have any points yet.", ephemeral=True)
+    if not event_records_data:
+        await interaction.response.send_message("You don't have event records yet.", ephemeral=True)
         return
 
+    await interaction.response.defer(ephemeral=True)
+
     embed = Embed(
-        title=f"{interaction.user.display_name}'s Activity Points",
+        title="f"{interaction.user.display_name}'s Participation Records",
+        description="A log of all recorded event participation.",
         color=interaction.user.color
     )
     embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
-    event_details = []
-    for event_id, points in user_data.get('events', {}).items():
-        event_config = EVENT_CONFIGS.get(event_id, {})
-        event_type = event_config.get('event_type', f"Unknown Event (ID: {event_id})")
-        event_details.append(f"**{event_type}**: {points:.2f} points")
-    
-    if event_details:
-        embed.add_field(name="Points per Event", value="\n".join(event_details), inline=False)
+    # Sort records by start time, newest first
+    user_event_records = sorted(event_records_data, key=lambda x: x['start_time'], reverse=True)
 
-    total_points = user_data.get('total_points', 0)
-    embed.add_field(name="Total Points", value=f"**{total_points:.2f}**", inline=False)
-    
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    record_fields = []
+    for record in user_event_records:
+        event_date = datetime.fromisoformat(record['start_time']).strftime('%Y-%m-%d %H:%M')
+        duration_mins = record.get('duration_minutes', 0.0)
+        points = record.get('points_earned', 0.0)
+        event_type = record.get('event_type', 'Unknown')
+        
+        field_value = (
+            f"**Event:** {event_type}\n"
+            f"**Duration:** {duration_mins:.2f} mins\n"
+            f"**Points:** {points:.2f}"
+        )
+        record_fields.append((f"Record - {event_date}", field_value))
+
+    # Add fields to the embed
+    for name, value in record_fields:
+        embed.add_field(name=name, value=value, inline=False)
+
+    if len(user_event_records) > 20:
+        embed.set_footer(text=f"Showing the last 20 of {len(user_event_records)} records.")
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @event_group.command(name="id", description="Lists all available event IDs and their types.")
 async def id(interaction: Interaction):
@@ -345,11 +362,24 @@ async def id(interaction: Interaction):
 
 @event_group.command(name="summary", description="Displays the point leaderboard for the server.")
 async def summary(interaction: Interaction):
-    await interaction.response.defer(ephemeral=False)
-    points_data = load_data(POINTS_FILE, {})
-    if not points_data:
-        await interaction.followup.send("No points have been recorded yet.")
+    global event_records_data
+
+    if not event_records_data:
+        await interaction.response.send_message("No points have been recorded yet.", ephemeral=True)
         return
+
+    await interaction.response.defer(ephemeral=True)
+
+    points_data = {}
+    for record in event_records_data:
+        try:
+            user = await interaction.guild.fetch_member(int(record['user_id']))
+            user_display_name = user.display_name
+        except (NotFound, HTTPException):
+            user_display_name = f"Unknown User (ID: {record['user_id']})"
+
+        user_points = points_data.setdefault(user_display_name, {'total_points': 0})
+        user_points['total_points'] = user_points['total_points'] + record.get('points_earned', 0.0)
 
     sorted_users = sorted(points_data.items(), key=lambda item: item[1].get('total_points', 0), reverse=True)
 
@@ -361,7 +391,7 @@ async def summary(interaction: Interaction):
         return
 
     leaderboard_text = ""
-    for i, (user_id, data) in enumerate(sorted_users[:20], 1):
+    for i, (user_id, data) in enumerate(sorted_users[:50], 1):
         try:
             member = await interaction.guild.fetch_member(int(user_id))
             member_name = member.display_name
@@ -376,12 +406,14 @@ async def summary(interaction: Interaction):
 
 @event_group.command(name="records", description="Shows all event participation records.")
 async def records(interaction: Interaction):
-    """Displays all event records from the persistent store."""
-    await interaction.response.defer(ephemeral=True)
+    """Displays all event records of all users."""
+    global event_records_data
 
     if not event_records_data:
-        await interaction.followup.send("There are no event records yet.", ephemeral=True)
+        await interaction.response.send_message("There are no event records yet.", ephemeral=True)
         return
+
+    await interaction.response.defer(ephemeral=True)
 
     embed = Embed(
         title="Event Participation Records",
@@ -425,13 +457,13 @@ async def records(interaction: Interaction):
 
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-
 # Enhanced /event reset command to backup and clear event records
 @event_group.command(name="reset", description="[ADMIN] Backs up and clears all event data.")
 @app_commands.checks.has_permissions(administrator=True)
 async def reset(interaction: Interaction):
     """Backs up event records, then clears all active events and recorded points."""
-    global active_events, points_data, event_records_data
+    global active_events
+    global event_records_data
 
     # Backup event_records.json
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -452,10 +484,8 @@ async def reset(interaction: Interaction):
 
     # Clear data in memory and files
     active_events.clear()
-    points_data.clear()
     event_records_data.clear()
     save_data(ACTIVE_EVENTS_FILE, {})
-    save_data(POINTS_FILE, {})
     save_data(EVENT_RECORDS_FILE, [])
 
     await interaction.response.send_message(
@@ -463,7 +493,6 @@ async def reset(interaction: Interaction):
         f"Previous records have been backed up to `{backup_file_name}`.",
         ephemeral=True
     )
-
 
 @reset.error
 async def reset_error(interaction: Interaction, error: app_commands.AppCommandError):
