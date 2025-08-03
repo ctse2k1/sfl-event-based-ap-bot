@@ -59,7 +59,7 @@ All commands are accessed via the `/event` slash command group.
 -   `/event me`: Check your personal total points and a summary of points per event.
 -   `/event id`: View a list of all available event IDs and their types.
 -   `/event summary`: Displays the server-wide activity point leaderboard.
--   `/event records`: (Admin only) Shows a detailed log of the most recent event participations.
+-   `/event records`: Shows a detailed log of the most recent event participations.
 -   `/event reset`: (Admin only) Backs up and clears all server points and event data.
 
 ---
