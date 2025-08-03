@@ -351,7 +351,7 @@ async def me(interaction: Interaction):
         embed.add_field(name=name, value=value, inline=False)
 
     # Add total points to the embed
-    embed.add_field(name=f"{interaction.user.display_name}'s Total Points", value=f"{total_points:.2f}", inline=False)
+    embed.add_field(name=f"{interaction.user.display_name}'s Total Points", value=f"**Total Points:** {total_points:.2f}", inline=False)
 
     if len(sorted_records) > 20:
         embed.set_footer(text=f"Showing the last 20 of {len(sorted_records)} records.")
