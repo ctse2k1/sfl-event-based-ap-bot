@@ -58,9 +58,12 @@ The system is a single Python application that connects to the Discord Gateway A
 - **FR4.1: Me Command (`/event me`):** A user must be able to view their own participation history and total points.
 - **FR4.2: Summary Command (`/event summary`):** Any user must be able to view a server-wide leaderboard of points.
 - **FR4.3: ID Command (`/event id`):** Any user must be able to list all available event types and their IDs.
+- **FR4.4: Event Records (`/event records`):** Any user must be able to display a historical log of all participation records, including user, event type, duration, and points earned.
 
 ### 3.5. Administrative Commands
-- **FR5.1: Reset All Data (`/event reset`):** An administrator must be able to reset all event data, including participation history and points for all users. This command requires no parameters.
+- **FR5.1: Data Reset (`/event reset`):** An administrator must have the ability to clear all active events, points, and records.
+- **FR5.2: Data Backup:** Before executing a reset, the system must create a timestamped backup of the `event_records.json` file.
+- **FR5.3: Permissions:** The reset command must be restricted to users with Administrator permissions on the server.
 
 ## 4. Non-Functional Requirements
 
