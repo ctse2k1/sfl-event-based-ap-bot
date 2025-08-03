@@ -61,7 +61,6 @@ The system is a single Python application that connects to the Discord Gateway A
 
 ### 3.5. Administrative Commands
 - **FR5.1: Reset All Data (`/event reset`):** An administrator must be able to reset all event data, including participation history and points for all users. This command requires no parameters.
-- **FR5.2: Reset Member Data (`/event resetmember`):** An administrator must be able to reset the points and participation history for a specific member.
 
 ## 4. Non-Functional Requirements
 
