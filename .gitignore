@@ -1,12 +1,9 @@
-# Python
+# Environment variables
+.env
+
+# Data files
+data/
+
+# Python cache
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-
-# Environment
-.env
-bot.pid
-
-# Logs
-*.log
