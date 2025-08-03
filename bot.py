@@ -330,12 +330,13 @@ async def me(interaction: Interaction):
     sorted_records = sorted(filtered_records, key=lambda x: x['start_time'], reverse=True)
 
     record_fields = []
+    total_points = 0.0
     for record in sorted_records:
         event_date = datetime.fromisoformat(record['start_time']).strftime('%Y-%m-%d %H:%M')
         duration_mins = record.get('duration_minutes', 0.0)
         points = record.get('points_earned', 0.0)
         event_type = record.get('event_type', 'Unknown')
-        
+
         field_value = (
             f"**Event:** {event_type}\n"
             f"**Duration:** {duration_mins:.2f} mins\n"
@@ -343,9 +344,14 @@ async def me(interaction: Interaction):
         )
         record_fields.append((f"Record - {event_date}", field_value))
 
+        total_points = total_points + points
+
     # Add fields to the embed
     for name, value in record_fields:
         embed.add_field(name=name, value=value, inline=False)
+
+    # Add total points to the embed
+    embed.add_field(name=f"{interaction.user.display_name}'s Total Points", value=f"{total_points:.2f}", inline=False)
 
     if len(sorted_records) > 20:
         embed.set_footer(text=f"Showing the last 20 of {len(sorted_records)} records.")
