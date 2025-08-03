@@ -1,5 +1,7 @@
 # Software Specification: SFL Event-Based Activity Point Bot
 
+**Version:** `v0.0.8`
+
 ## 1. Introduction
 
 This document outlines the software specifications for the SFL Event-Based Activity Point Bot. The bot is designed to run on Discord and allows server administrators to reward users with points for participating in designated events. The system is event-driven, with points calculated based on the duration of participation.
@@ -65,7 +67,7 @@ All commands are implemented as Discord Slash Commands under the main `/event` g
 This file defines the types of events that can be run. It contains a list of event objects.
 
 **Structure**:
-```json
+| `/event records`  | Displays a log of the most recent event participation records.           | None               | Anyone           |
 {
   "events": [
     {
@@ -93,7 +95,7 @@ This file stores environment variables.
 **Structure**:
 ```
 DISCORD_TOKEN=YOUR_DISCORD_BOT_TOKEN
-```
+-   **Missing Permissions**: The administrative command (`/event reset`) will fail with an informative error if used by a non-administrator.
 
 -   `DISCORD_TOKEN`: The bot's secret token provided by the Discord Developer Portal.
 

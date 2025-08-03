@@ -1,5 +1,7 @@
 # SFL Event-Based Activity Point Bot
 
+**Version:** `v0.0.8`
+
 This Discord bot allows server members to earn activity points by participating in events. Event hosts can start and stop events, and the bot will automatically track participation time and award points accordingly. It features a leaderboard, personal point tracking, and administrative controls.
 
 ## ✨ Features
@@ -12,7 +14,7 @@ This Discord bot allows server members to earn activity points by participating 
 - **Admin Controls**: Secure commands for resetting data and viewing participation records.
 - **Data Persistence**: All points and event data are saved locally in a `data` directory.
 
-## 🚀 Getting Started
+- **Admin Controls**: Secure command for resetting data.
 
 ### Prerequisites
 
@@ -51,7 +53,7 @@ All commands are accessed via the `/event` slash command group.
 
 -   `/event start <event_id>`: Starts an event you will host. The bot provides a unique join code.
 -   `/event join <code>`: Join an active event using its 4-character code.
--   `/event stop`: Stops the event you are currently hosting and distributes points to all participants.
+-   `/event records`: Shows a detailed log of the most recent event participations.
 -   `/event kick <member>`: (Host only) Removes a participant from your event and calculates their points.
 -   `/event list`: (Host only) Shows a list of all participants in your current event.
 -   `/event me`: Check your personal total points and a summary of points per event.
