@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import json
 import logging
@@ -95,12 +96,14 @@ def calculate_and_finalize_points(member_id, event_code):
     duration_minutes = duration_seconds / 60
     points = max(0, round(duration_minutes * event_config.get('points_per_minute', 0), 2))
 
-    # Update points data
+    # Update aggregate points data
     user_points = points_data.setdefault(member_id_str, {'total_points': 0, 'events': {}})
     event_id_str = str(event['event_id'])
     user_points['events'][event_id_str] = user_points['events'].get(event_id_str, 0) + points
     user_points['total_points'] = round(sum(user_points['events'].values()), 2)
-    # Save raw event record
+    save_data(POINTS_FILE, points_data)
+
+    # Load existing event records and add the new one
     event_records = load_data(EVENT_RECORDS_FILE, [])
     event_record = {
         'user_id': member_id_str,
@@ -113,20 +116,17 @@ def calculate_and_finalize_points(member_id, event_code):
     }
     event_records.append(event_record)
     save_data(EVENT_RECORDS_FILE, event_records)
-
-    
-    save_data(POINTS_FILE, points_data)
     
     return {"points": points, "duration": duration_minutes}
-
 # --- Bot Setup ---
 intents = discord.Intents.default()
 intents.members = True
-intents = discord.Intents.default()
-intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
-event_group = app_commands.Group(name="event", description="Manage event activity points.")
 
+# --- App Command Group ---
+event_group = app_commands.Group(name="event", description="Commands for managing AP events.")
+
+# --- Bot Events ---
 @bot.event
 async def on_ready():
     logging.info(f'Logged in as {bot.user} (ID: {bot.user.id})')
@@ -338,37 +338,57 @@ async def summary(interaction: Interaction):
     embed.description = leaderboard_text
     await interaction.followup.send(embed=embed)
 
-@event_group.command(name="records", description="Shows the detailed point records for a specific member.")
-@app_commands.describe(member="The member to view the records of.")
-async def records(interaction: Interaction, member: Member):
-    await interaction.response.defer(ephemeral=True)
-    
-    member_id_str = str(member.id)
-    user_data = points_data.get(member_id_str)
+@event_group.command(name="records", description="Displays all event participation records.")
+async def records(interaction: Interaction):
+    """Displays a formatted list of all event participation records."""
+    await interaction.response.defer(ephemeral=False)
 
-    if not user_data or not user_data.get('events'):
-        await interaction.followup.send(f"{member.display_name} has no recorded points.", ephemeral=True)
+    try:
+        event_records = load_data(EVENT_RECORDS_FILE, [])
+    except Exception as e:
+        logging.error(f"Failed to load event records: {e}")
+        await interaction.followup.send("Error: Could not load event records.", ephemeral=True)
         return
 
-    embed = Embed(
-        title=f"Point Records for {member.display_name}",
-        color=member.color
-    )
-    embed.set_thumbnail(url=member.display_avatar.url)
+    if not event_records:
+        await interaction.followup.send("No event records have been logged yet.")
+        return
 
-    records_text = ""
-    for event_id, points in user_data.get('events', {}).items():
-        event_config = EVENT_CONFIGS.get(str(event_id), {})
-        event_type = event_config.get('event_type', f"Unknown Event (ID: {event_id})")
-        records_text += f"**{event_type}**: {points:.2f} points\n"
+    event_records.sort(key=lambda r: r.get('start_time', ''), reverse=True)
+
+    header = "{:<12} {:<20} {:<15} {:<10} {:<10}\n".format("Date", "User", "Event Type", "Duration", "Points")
+    separator = "-"*70 + "\n"
     
-    if records_text:
-        embed.description = records_text
-    else:
-        embed.description = "No specific event points found."
+    response_text = "```\n" + header + separator
+    
+    for record in event_records:
+        try:
+            member = await interaction.guild.fetch_member(int(record['user_id']))
+            username = member.display_name
+        except (discord.NotFound, discord.HTTPException):
+            username = f"ID: {record['user_id']}"
 
+        try:
+            event_date = datetime.fromisoformat(record['start_time']).strftime('%Y-%m-%d')
+        except (ValueError, TypeError):
+            event_date = "Invalid Date"
 
-@event_group.command(name="reset", description="[ADMIN] Clears all event data and points.")
+        event_type = record.get('event_type', 'N/A')
+        duration = f"{record.get('duration_minutes', 0):.1f}m"
+        points = f"{record.get('points_earned', 0):.2f}"
+
+        line = "{:<12} {:<20} {:<15} {:<10} {:<10}\n".format(event_date, username, event_type, duration, points)
+
+        if len(response_text) + len(line) > 1990:
+            response_text += "```"
+            await interaction.followup.send(response_text)
+            response_text = "```\n"
+
+        response_text += line
+
+    response_text += "```"
+    await interaction.followup.send(response_text)
+@event_group.command(name="reset", description="Clears all active events and recorded points.")
 @app_commands.checks.has_permissions(administrator=True)
 async def reset(interaction: Interaction):
     """Clears all active events and recorded points."""
