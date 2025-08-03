@@ -8,6 +8,42 @@ from dotenv import load_dotenv
 import random
 import string
 from datetime import datetime, timezone
+import atexit
+import sys
+
+# --- PID Lock File Check ---
+PID_FILE = 'bot.pid'
+
+def cleanup():
+    """Remove the PID file on exit."""
+    if os.path.exists(PID_FILE):
+        logging.info(f"Shutting down. Removing PID file: {PID_FILE}")
+        os.remove(PID_FILE)
+
+atexit.register(cleanup)
+
+if os.path.isfile(PID_FILE):
+    try:
+        with open(PID_FILE, 'r') as f:
+            pid = int(f.read().strip())
+        # Check if the process exists on UNIX-like systems by sending a null signal.
+        os.kill(pid, 0)
+    except (IOError, ValueError, OSError):
+        # Stale PID file (e.g., process not running), so we remove it.
+        logging.warning(f"Found and removed stale PID file: {PID_FILE}")
+        os.remove(PID_FILE)
+    else:
+        # Process is still running
+        logging.error(f"FATAL: Another instance is already running with PID {pid}. Exiting.")
+        sys.exit(1)
+
+# Create the new PID file for the current instance
+try:
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+except IOError as e:
+    logging.error(f"FATAL: Could not write PID file {PID_FILE}. Exiting. Error: {e}")
+    sys.exit(1)
 
 # --- Basic Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] [%(levelname)-8s] %(message)s')
