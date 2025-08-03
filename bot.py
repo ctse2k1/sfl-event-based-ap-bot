@@ -11,10 +11,14 @@ from datetime import datetime, timezone
 import atexit
 import sys
 import shutil
+# --- Constants ---
+DATA_DIR = 'data'
+PID_FILE = os.path.join(DATA_DIR, 'bot.pid')
+
+# --- Ensure Data Directory Exists ---
+os.makedirs(DATA_DIR, exist_ok=True)
 
 # --- PID Lock File Check ---
-PID_FILE = 'bot.pid'
-
 def cleanup():
     """Remove the PID file on exit."""
     if os.path.exists(PID_FILE):
@@ -39,6 +43,12 @@ if os.path.isfile(PID_FILE):
         sys.exit(1)
 
 # Create the new PID file for the current instance
+try:
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+except IOError as e:
+    logging.error(f"FATAL: Could not write PID file {PID_FILE}. Exiting. Error: {e}")
+    sys.exit(1)
 try:
     with open(PID_FILE, 'w') as f:
         f.write(str(os.getpid()))
