@@ -318,7 +318,7 @@ async def me(interaction: Interaction):
 
     embed = Embed(
         title=f"{interaction.user.display_name}'s Participation Records",
-        description="A log of all recorded event participation.",
+        description=f"A log of {interaction.user.display_name}'s recorded event participation.",
         color=interaction.user.color
     )
     embed.set_thumbnail(url=interaction.user.display_avatar.url)
